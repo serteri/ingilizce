@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SoundWave, Sparks } from "@/components/anim/Effects";
+import DialogueStage from "@/components/anim/DialogueStage";
 import Reveal from "@/components/anim/Reveal";
 import SentenceArena from "@/components/SentenceArena";
 import TenseTimeline from "@/components/TenseTimeline";
@@ -265,6 +266,10 @@ function Mistakes({ items }: { items: NonNullable<GrammarTopic["mistakes"]> }) {
   );
 }
 
+function speakerOf(who?: string) {
+  return who === "B" ? "B" : "A";
+}
+
 function SnippetBox({
   snippet,
   badge,
@@ -299,6 +304,26 @@ function SnippetBox({
           ({badge})
         </span>
       </p>
+      <DialogueStage
+        speaker={active === null ? null : speakerOf(snippet.lines[active]?.who)}
+        talk="live"
+        bubbleKey={String(active)}
+      >
+        {active === null || !snippet.lines[active] ? (
+          <span className="text-slate-500">
+            🔊 “Tümünü Dinle” ile konuşmayı canlandır.
+          </span>
+        ) : (
+          <>
+            <span className="font-medium">{snippet.lines[active].text}</span>
+            {showTr && snippet.lines[active].tr && (
+              <span className="mt-1 block text-xs text-slate-500">
+                {snippet.lines[active].tr}
+              </span>
+            )}
+          </>
+        )}
+      </DialogueStage>
       <ul className="space-y-1.5 text-sm">
         {snippet.lines.map((l, i) => (
           <li

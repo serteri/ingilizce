@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import DialogueStage from "@/components/anim/DialogueStage";
 import { Sparks } from "@/components/anim/Effects";
 import {
   coreSentences,
@@ -16,6 +17,7 @@ import {
 import { gameActions } from "@/lib/gameStore";
 import { reducedMotion } from "@/lib/motion";
 import { sentenceActions, useSentencePool } from "@/lib/sentenceStore";
+import { speakLines, stopSpeech } from "@/lib/speech";
 
 const SET_SIZE = 5;
 /** A background set is requested after this many finished sentences. */
@@ -59,11 +61,16 @@ function Round({
   const [misses, setMisses] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The board is only judged after "Kontrol Et".
+  const [checked, setChecked] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const reading = useRef(false);
   // Screen positions of blocks about to move, so they can fly to the slots.
   const flights = useRef(new Map<Role, DOMRect>());
 
   const full = slots.every(Boolean);
-  const wrong = full && !result && slots.some((r, i) => r !== roles[i]);
+  const wrong = checked && !result && slots.some((r, i) => r !== roles[i]);
   const rule = RULES[topicId] ?? RULES["sentence-structure"];
 
   useLayoutEffect(() => {
@@ -93,6 +100,25 @@ function Round({
     });
   }, [slots]);
 
+  // Stop reading this sentence when its board leaves.
+  useEffect(
+    () => () => {
+      if (reading.current) stopSpeech();
+    },
+    [],
+  );
+
+  function act() {
+    reading.current = true;
+    speakLines([{ who: "B", text: englishOf(sentence) }], setVoiceError, {
+      onLine: () => setSpeaking(true),
+      onDone: () => {
+        reading.current = false;
+        setSpeaking(false);
+      },
+    });
+  }
+
   function remember(role: Role) {
     const el = root.current?.querySelector<HTMLElement>(`[data-block="${role}"]`);
     if (el) flights.current.set(role, el.getBoundingClientRect());
@@ -105,12 +131,18 @@ function Round({
     onDone();
   }
 
-  /** Scores a completely filled board. */
-  function settle(next: (Role | null)[], usedHint: boolean) {
+  /** Any change to the board withdraws the last verdict. */
+  function update(next: (Role | null)[]) {
     setSlots(next);
-    if (!next.every(Boolean)) return;
-    if (next.every((r, i) => r === roles[i])) {
-      finish(usedHint ? "hinted" : "self");
+    setChecked(false);
+  }
+
+  function check() {
+    if (result || checked || !full) return;
+    onTouch();
+    setChecked(true);
+    if (slots.every((r, i) => r === roles[i])) {
+      finish(hinted.length > 0 ? "hinted" : "self");
     } else {
       setMisses((m) => m + 1);
       gameActions.wrong();
@@ -122,17 +154,14 @@ function Round({
     if (result || at < 0 || slots.includes(role)) return;
     onTouch();
     remember(role);
-    settle(
-      slots.map((r, i) => (i === at ? role : r)),
-      hinted.length > 0,
-    );
+    update(slots.map((r, i) => (i === at ? role : r)));
   }
 
   function remove(i: number) {
     const role = slots[i];
     if (result || !role || hinted.includes(role)) return;
     remember(role);
-    setSlots(slots.map((r, k) => (k === i ? null : r)));
+    update(slots.map((r, k) => (k === i ? null : r)));
   }
 
   /** Correct blocks stay; wrong ones go back to the bank. */
@@ -142,7 +171,7 @@ function Round({
 
   function retry() {
     slots.forEach((r, i) => r && r !== roles[i] && remember(r));
-    setSlots(kept());
+    update(kept());
   }
 
   function hint() {
@@ -154,10 +183,7 @@ function Round({
     slots.forEach((r, i) => r && r !== roles[i] && remember(r));
     remember(role);
     setHinted((h) => [...h, role]);
-    settle(
-      base.map((r, i) => (i === at ? role : r)),
-      true,
-    );
+    update(base.map((r, i) => (i === at ? role : r)));
   }
 
   function show() {
@@ -167,6 +193,10 @@ function Round({
   }
 
   const solved = result !== null;
+  const attempt = slots.map((r) => (r ? sentence[r] : "…")).join(" ");
+  const started = slots.some(Boolean);
+  // A asks, B (the learner) answers; A steps back in after a wrong check.
+  const speaker = solved ? "B" : wrong || !started ? "A" : "B";
 
   return (
     <div
@@ -182,13 +212,31 @@ function Round({
       }`}
     >
       <div className="anim-item" style={{ ["--i" as string]: 1 }}>
-        <p className="text-base font-semibold text-slate-900">🇹🇷 {sentence.tr}</p>
+        <p data-target className="text-base font-semibold text-slate-900">
+          🇹🇷 {sentence.tr}
+        </p>
         <p className="mt-1 text-xs text-slate-600">
           Hedef kalıp:{" "}
           <b>{roles.map((r) => ROLE_INFO[r].tag).join(" + ")}</b> · Blokları sırayla
           tıklayarak cümleyi kur.
         </p>
       </div>
+
+      <DialogueStage
+        speaker={speaker}
+        talk={speaking ? "live" : solved || !started || wrong ? "burst" : "still"}
+        bubbleKey={`${speaker}-${solved}-${wrong}-${started}`}
+      >
+        {solved ? (
+          <span className="text-base font-semibold">“{englishOf(sentence)}”</span>
+        ) : wrong ? (
+          "Hmm, olmadı. Bir daha bakalım!"
+        ) : started ? (
+          <span className="font-medium">{attempt}</span>
+        ) : (
+          "Bunu İngilizce nasıl söylersin?"
+        )}
+      </DialogueStage>
 
       {/* Slots */}
       <ol
@@ -256,7 +304,15 @@ function Round({
       <div aria-live="polite">
         {wrong && (
           <p className="anim-open rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">
-            Sarsılan bloklar yanlış yerde. Nasıl devam etmek istersin?
+            <span className="block">Hatalı parça:</span>
+            {slots.map((r, i) =>
+              r && r !== roles[i] ? (
+                <span key={r} className="block font-normal">
+                  ✗ “{sentence[r]}” ({ROLE_INFO[r].label}) {i + 1}. sırada olmaz; bu yuva{" "}
+                  <b>{ROLE_INFO[roles[i]].label}</b> için.
+                </span>
+              ) : null,
+            )}
           </p>
         )}
         {solved && (
@@ -275,6 +331,10 @@ function Round({
             <p className="text-base font-medium text-slate-900">{englishOf(sentence)}</p>
             <p className="text-slate-700">🇬🇧 {rule.en}</p>
             <p className="text-slate-700">🇹🇷 {rule.tr}</p>
+            <button onClick={act} className={`${small} bg-violet-100 text-violet-900 hover:bg-violet-200`}>
+              🎭 Cümleyi Canlandır
+            </button>
+            {voiceError && <p className="text-xs text-amber-700">{voiceError}</p>}
           </div>
         )}
       </div>
@@ -286,20 +346,27 @@ function Round({
           </button>
         ) : (
           <>
+            <button
+              onClick={check}
+              disabled={!full || checked}
+              className={`${small} bg-emerald-600 text-white hover:bg-emerald-500 disabled:cursor-not-allowed`}
+            >
+              ✔ Kontrol Et
+            </button>
             {wrong && (
               <button onClick={retry} className={`${small} bg-blue-600 text-white hover:bg-blue-500`}>
                 🔁 Tekrar Dene
               </button>
             )}
             <button onClick={hint} className={`${small} bg-amber-100 text-amber-900 hover:bg-amber-200`}>
-              💡 İpucu Al (Sıradaki Bloğu Göster)
+              💡 İpucu (sıradaki blok)
             </button>
             {(misses > 0 || hinted.length > 0) && (
               <button
                 onClick={show}
                 className={`${small} bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100`}
               >
-                🙋 Yapamadım, Doğru Dizilimi Göster
+                🙋 Doğruyu Göster
               </button>
             )}
           </>
