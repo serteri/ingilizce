@@ -18,3 +18,91 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Gamification & timeline micro-animations */
+@keyframes tl-ring {
+  0% { r: 8; opacity: 0.7; }
+  100% { r: 34; opacity: 0; }
+}
+@keyframes tl-draw {
+  from { stroke-dashoffset: var(--len, 300); }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes tl-pop {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes panelEnter {
+  from { opacity: 0; transform: translateY(10px); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes popBounce {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.25); }
+  65% { transform: scale(0.94); }
+  100% { transform: scale(1); box-shadow: 0 0 0 12px rgba(99, 102, 241, 0); }
+}
+@keyframes shakeError {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+  55% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0.25); }
+  100% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.7); }
+  70% { opacity: 1; transform: translateY(0) scale(1.08); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes eqBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.anim-panel { animation: panelEnter 0.45s ease-out backwards; }
+/* Direct children arrive one after another. */
+.anim-stagger > * { animation: panelEnter 0.45s ease-out backwards; }
+.anim-stagger > :nth-child(2) { animation-delay: 0.06s; }
+.anim-stagger > :nth-child(3) { animation-delay: 0.12s; }
+.anim-stagger > :nth-child(4) { animation-delay: 0.18s; }
+.anim-stagger > :nth-child(5) { animation-delay: 0.24s; }
+.anim-stagger > :nth-child(n + 6) { animation-delay: 0.3s; }
+.anim-bounce { animation: popBounce 0.6s ease-out; }
+.anim-shake { animation: shakeError 0.45s ease-in-out; }
+/* Same motion under a second name, so toggling classes replays it. */
+@keyframes shakeAgain {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.anim-shake-again { animation: shakeAgain 0.45s ease-in-out; }
+.anim-glow { animation: pulseGlow 1s ease-out; }
+.anim-pop { animation: popIn 0.35s ease-out backwards; }
+.anim-eq { transform-origin: bottom; animation: eqBar 0.7s ease-in-out infinite; }
+button { transition-property: color, background-color, border-color, opacity, transform, box-shadow; transition-duration: 0.2s; }
+button:not(:disabled):active { transform: scale(0.95); }
+.tl-ring { animation: tl-ring 2s ease-out infinite; }
+.tl-draw {
+  stroke-dasharray: var(--len, 300);
+  animation: tl-draw 1.6s ease-out forwards;
+}
+.tl-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: tl-pop 0.5s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .tl-pop { opacity: 1; }
+  .tl-draw { stroke-dasharray: none; }
+  .tl-ring { opacity: 0; }
+  button:not(:disabled):active { transform: none; }
+}

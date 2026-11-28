@@ -15,12 +15,21 @@ const STAGE_OPTIONS: { stage: Stage; label: string; hint: string }[] = [
 export default function VoiceSection({
   onStatus,
   onLeave,
+  preset,
 }: {
   onStatus: (s: VoiceStatus) => void;
   onLeave: () => void;
+  /** Topic picked from a grammar snippet; applied once per nonce. */
+  preset?: { lessonId: string; nonce: number } | null;
 }) {
   const [lessonId, setLessonId] = useState<string>(LESSONS[0].id);
   const [stage, setStage] = useState<Stage>("end_conversation");
+  const [seenNonce, setSeenNonce] = useState(0);
+  if (preset && preset.nonce !== seenNonce) {
+    setSeenNonce(preset.nonce);
+    setLessonId(preset.lessonId);
+    setStage("end_conversation");
+  }
   const [active, setActive] = useState<{ lessonId?: string; stage: Stage } | null>(
     null,
   );

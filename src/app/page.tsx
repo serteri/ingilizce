@@ -6,6 +6,8 @@ import VocabSection from "@/components/VocabSection";
 import VoiceSection from "@/components/VoiceSection";
 import type { VoiceStatus } from "@/components/VoiceSession";
 import { TOPICS } from "@/data/grammar";
+import { LESSONS } from "@/data/lessons";
+import { useGameState } from "@/lib/gameStore";
 import { useGrammarState } from "@/lib/grammarStore";
 import { useVocabState } from "@/lib/vocabStore";
 
@@ -53,6 +55,19 @@ export default function Home() {
 
   const handleStatus = useCallback((s: VoiceStatus) => setStatus(s), []);
   const handleLeave = useCallback(() => setStatus(null), []);
+  const [preset, setPreset] = useState<{ lessonId: string; nonce: number } | null>(
+    null,
+  );
+  const game = useGameState();
+
+  // Grammar topics that match a voice lesson use it; others fall back to free chat.
+  const handlePractice = useCallback((topicId: string) => {
+    setPreset({
+      lessonId: LESSONS.some((l) => l.id === topicId) ? topicId : "free",
+      nonce: Date.now(),
+    });
+    setSection("voice");
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -70,6 +85,33 @@ export default function Home() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              key={`xp-${game.xp}`}
+              title="Toplam XP ve seviye"
+              className={`rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 ${game.xp > 0 ? "anim-bounce" : ""}`}
+            >
+              ⭐ {game.ready ? game.xp : 0} XP · Sv. {game.ready ? game.level : 1}
+            </span>
+            <span
+              key={`streak-${game.streak}`}
+              title="Üst üste aktif gün"
+              className={`rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 ${game.streak > 0 ? "anim-bounce" : ""}`}
+            >
+              🔥 {game.ready ? game.streak : 0} gün
+            </span>
+            <span
+              key={`combo-${game.combo}`}
+              title="Üst üste doğru cevap"
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                game.combo > 0 ? "anim-bounce" : ""
+              } ${
+                game.ready && game.combo >= 3
+                  ? "bg-rose-100 text-rose-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              ⚡ Combo ×{game.ready ? game.combo : 0}
+            </span>
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               ✓ {vocab.ready ? vocab.learned.length : 0} kelime öğrenildi
             </span>
@@ -94,15 +136,19 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className={section === "grammar" ? "block" : "hidden"}>
-          <GrammarSection />
+        <div className={section === "grammar" ? "anim-panel block" : "hidden"}>
+          <GrammarSection onPractice={handlePractice} />
         </div>
-        <div className={section === "vocab" ? "block" : "hidden"}>
+        <div className={section === "vocab" ? "anim-panel block" : "hidden"}>
           <VocabSection />
         </div>
         {/* Kept mounted so a running voice session survives tab switches. */}
-        <div className={section === "voice" ? "block" : "hidden"}>
-          <VoiceSection onStatus={handleStatus} onLeave={handleLeave} />
+        <div className={section === "voice" ? "anim-panel block" : "hidden"}>
+          <VoiceSection
+            onStatus={handleStatus}
+            onLeave={handleLeave}
+            preset={preset}
+          />
         </div>
       </main>
     </div>

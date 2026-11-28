@@ -12,6 +12,8 @@ export type Question = {
   options?: string[];
   /** Short Turkish grammar explanation shown after checking. */
   why?: string;
+  /** Stable id for questions generated at runtime. */
+  id?: string;
 };
 
 export const fill = (prompt: string, answer: string, why?: string, alts?: string[]): Question => ({
@@ -39,7 +41,7 @@ export type Example = { en: string; tr: string; note?: string };
 
 export type Snippet = {
   title: string;
-  lines: { who: string; text: string }[];
+  lines: { who: string; text: string; tr?: string }[];
   explanation: string;
 };
 
@@ -94,6 +96,7 @@ function fromLesson(
   level: string,
   extra: {
     title: string;
+    examples: Example[];
     sections: GrammarTopic["sections"];
     mistakes: NonNullable<GrammarTopic["mistakes"]>;
     phrases: GrammarTopic["phrases"];
@@ -110,10 +113,10 @@ function fromLesson(
     level,
     summary: extra.summary ?? l.summary,
     focus: extra.focus ?? l.grammarFocus,
-    sections: [...extra.sections, ...l.grammar],
+    sections: extra.sections,
     mistakes: extra.mistakes,
     phrases: extra.phrases,
-    examples: l.examples,
+    examples: extra.examples,
     snippet: extra.snippet,
     questions: pool(id, extra.questions),
   };
@@ -128,38 +131,38 @@ const sentenceStructure: GrammarTopic = {
     "Basic English word order Subject + Verb + Object + Place + Time compared with Turkish Subject + Time + Place + Object + Verb",
   sections: [
     {
-      title: "İngilizce cümle dizilimi",
+      title: "Sentence Order (SVOMPT) / Cümle Dizilimi",
       points: [
-        "Temel sıra: Özne (S) + Fiil (V) + Nesne (O) + Yer (P) + Zaman (T).",
-        "I (S) eat (V) breakfast (O) at home (P) every day (T).",
-        "Fiil, özneden HEMEN sonra gelir. Cümleyi fiilden sonra devam ettirirsin.",
+        "Basic English order: Subject + Verb + Object + Manner + Place + Time (SVOMPT). → Temel sıra: Özne + Fiil + Nesne + Tarz + Yer + Zaman.",
+        "I (S) eat (V) breakfast (O) quickly (M) at home (P) every day (T). → Her gün evde hızlıca kahvaltı ederim.",
+        "The verb comes right after the subject. → Fiil, özneden HEMEN sonra gelir.",
       ],
     },
     {
-      title: "Türkçe cümle dizilimi",
+      title: "Turkish Order / Türkçe Dizilim",
       points: [
-        "Türkçede sıra genelde: Özne + Zaman + Yer + Nesne + Fiil. Fiil cümlenin SONUNDA gelir.",
+        "Turkish usually puts the verb LAST: Subject + Time + Place + Object + Verb. → Türkçede fiil genelde cümlenin SONUNDA gelir.",
         "Ben (S) her gün (T) evde (P) kahvaltı (O) ederim (V).",
-        "Türkçede ekler (-de, -i, -im) cümleyi taşır; İngilizcede bunun yerine kelime SIRASI ve edatlar (at, in, on) anlamı taşır.",
+        "Turkish uses suffixes (-de, -i, -im); English uses word order and prepositions (at, in, on). → Türkçede anlamı ekler taşır; İngilizcede kelime sırası ve edatlar taşır.",
       ],
     },
     {
-      title: "En önemli farklar",
+      title: "Key Differences / En Önemli Farklar",
       points: [
-        "Fiilin yeri: İngilizce özneden sonra (I eat ...), Türkçe sonda (... yerim).",
-        "Yer ve zaman: İngilizcede önce YER sonra ZAMAN (at home every day); Türkçede genelde önce zaman sonra yer (her gün evde).",
-        "Edatlar kelimeden ÖNCE gelir: in the house = evde (Türkçede ek kelimenin sonuna gelir).",
-        "Özne atlanamaz: Türkçede 'Yağıyor' denir, İngilizcede 'It is raining.' dersin (It/There zorunlu).",
-        "Olumsuz ve soru yapmak için yardımcı fiil gerekir: don't / does / did (Türkçede -me, -mi ekleri).",
+        "Verb position: English after the subject, Turkish at the end. → Fiilin yeri: İngilizce özneden sonra, Türkçe sonda.",
+        "Place before time in English (at home every day); Turkish often time before place (her gün evde). → İngilizcede önce yer, sonra zaman.",
+        "Prepositions come BEFORE the noun (in the house); Turkish suffixes come after (evde). → Edatlar kelimeden ÖNCE gelir.",
+        "The subject cannot be dropped: It is raining. (Turkish: Yağıyor.) → İngilizcede özne atlanamaz (It/There zorunlu).",
+        "Negatives and questions need a helper verb: don't / does / did. → Olumsuz ve soruda yardımcı fiil gerekir (Türkçede -me, -mi ekleri).",
       ],
     },
     {
-      title: "Yaygın tuzaklar",
+      title: "Common Mistakes / Yaygın Tuzaklar",
       points: [
-        "Kelimesi kelimesine çeviri yapma: 'I every day coffee drink' ✗ → I drink coffee every day ✓",
-        "Fiili sona atma: 'She a book reads' ✗ → She reads a book ✓",
-        "Zamanı yerin önüne koyma alışkanlığına dikkat: 'He works every day at a bank' (anlaşılır ama doğal değil) → He works at a bank every day ✓",
-        "Özneyi unutma: 'Is very cold' ✗ → It is very cold ✓",
+        "Word-for-word translation: 'I every day coffee drink' ✗ → I drink coffee every day ✓. → Kelimesi kelimesine çeviri yapma.",
+        "Verb at the end: 'She a book reads' ✗ → She reads a book ✓. → Fiili sona atma.",
+        "Time before place sounds unnatural: He works at a bank every day ✓. → Yer, zamandan önce gelir.",
+        "Missing subject: 'Is very cold' ✗ → It is very cold ✓. → Özneyi unutma.",
       ],
     },
   ],
@@ -220,16 +223,115 @@ const sentenceStructure: GrammarTopic = {
 const f = (prompt: string, answer: string, why?: string, alts?: string[]) =>
   fill(prompt, answer, why, alts);
 
+const beHaveDo: GrammarTopic = {
+  id: "be-have-do",
+  title: "1. Be, Have, Do & There Is",
+  level: "Başlangıç",
+  summary: "Temel yardımcı/durum fiilleri ve varlık bildirme: There is/are vs It is",
+  focus:
+    "The basic verbs be, have and do (as main and auxiliary verbs) and the difference between 'there is/are' (existence) and 'it is' (time, weather, identification)",
+  sections: [
+    {
+      title: "Be (am / is / are / was / were) / Be Fiili",
+      points: [
+        "Be links the subject to a description: job, age, place, feeling. → Be, özneyi meslek, yaş, yer ve duygu ile bağlar: I am a teacher. She is 25. We are at home.",
+        "Forms: I am, he/she/it is, you/we/they are; past: was/were. → Biçimler: I am, he/she/it is, you/we/they are; geçmiş: was/were.",
+        "Be makes its own negative and question; it does NOT need do/does. → Be'nin olumsuzu/sorusu do/does gerektirmez: She isn't here. Are you ready?",
+        "Be is also the helper in -ing forms: I am working. → -ing yapılarında yardımcı fiil olarak kullanılır.",
+      ],
+    },
+    {
+      title: "Have (have / has / had) / Have Fiili",
+      points: [
+        "Have = possess or relationship. → Sahiplik ve ilişki: I have a car. She has two brothers.",
+        "Informal: have got (same meaning, present only): She's got a new phone. → Konuşmada 'have got' da kullanılır (yalnız şimdiki zaman).",
+        "Have as an ACTION (eat, drink, take) uses do/does: Do you have lunch at one? I don't have coffee. → Eylem anlamında (yemek, içmek) do/does ister.",
+        "he/she/it → has (not 'haves'). → he/she/it ile has kullanılır.",
+      ],
+    },
+    {
+      title: "Do (do / does / did) / Do Fiili",
+      points: [
+        "Do as helper makes questions and negatives in Present/Past Simple: Do you like tea? I don't know. → Yardımcı fiil olarak soru ve olumsuz yapar.",
+        "Do as a main verb: do homework, do the dishes, do sports. (make: make a mistake, make the bed). → Ana fiil: do homework, do the dishes; make ayrı kalıplarda kullanılır.",
+        "After does/did the main verb stays base form: Does she work? (works ✗). → does/did'den sonra ana fiil yalın kalır.",
+      ],
+    },
+    {
+      title: "There is / There are vs It is / Varlık ve Tanımlama",
+      points: [
+        "There is (singular) / There are (plural) say that something exists: There is a cat in the garden. There are two chairs. → Bir şeyin var olduğunu bildirir (tekil/çoğul).",
+        "Negative and question: There isn't any milk. Is there a bank near here? → Olumsuz: There isn't / aren't; soru: Is/Are there...?",
+        "It is: time, weather, distance, identifying a known thing: It is Monday. It is cold. It's my bag. → It is: zaman, hava, mesafe ve bilinen bir şeyi tanıtma.",
+        "There + a/some/any (new information); It + the/my (already known). → There ile yeni bilgi (a/some/any), It ile bilinen şey (the/my).",
+        "Turkish 'var/yok' = there is/isn't, but the subject 'there' can't be dropped. → Türkçedeki 'var/yok'un İngilizce karşılığında There zorunludur.",
+      ],
+    },
+  ],
+  mistakes: [
+    { wrong: "Is a cat in the garden.", right: "There is a cat in the garden.", why: "Varlık bildirirken There özne olarak atlanamaz." },
+    { wrong: "There are a book on the table.", right: "There is a book on the table.", why: "Tekil isimle there is; çoğul isimle there are." },
+    { wrong: "I am agree with you.", right: "I agree with you.", why: "agree bir fiildir; Türkçedeki 'katılıyorum' gibi am/is/are almaz." },
+    { wrong: "She have two sisters.", right: "She has two sisters.", why: "he/she/it ile have → has." },
+    { wrong: "Do you have got a car?", right: "Have you got a car? / Do you have a car?", why: "have got ve do you have aynı anda kullanılmaz; birini seç." },
+  ],
+  phrases: [
+    { en: "There's a... / There are some...", tr: "...var" },
+    { en: "Is there a ... near here?", tr: "Yakında ... var mı?" },
+    { en: "I've got...", tr: "...var / ...ım var (sahiplik)" },
+    { en: "It's cold / It's Monday.", tr: "Hava soğuk / Bugün Pazartesi." },
+  ],
+  examples: [
+    { en: "I am a student.", tr: "Ben öğrenciyim.", note: "Be + meslek. Türkçede ek (-yim), İngilizcede am gerekir." },
+    { en: "She isn't at home.", tr: "O evde değil.", note: "Be'nin olumsuzu: isn't, do/does yok." },
+    { en: "Are you hungry?", tr: "Aç mısın?", note: "Be'nin sorusu: fiil başa gelir." },
+    { en: "He has a small dog.", tr: "Onun küçük bir köpeği var.", note: "he/she/it → has. 'Var' = have/has." },
+    { en: "Do you have breakfast at home?", tr: "Kahvaltıyı evde mi yaparsın?", note: "Eylem anlamında have: do/does ile soru." },
+    { en: "I do my homework after dinner.", tr: "Ödevimi akşam yemeğinden sonra yaparım.", note: "do = ana fiil (do homework)." },
+    { en: "There is a bank near the station.", tr: "İstasyonun yakınında bir banka var.", note: "Yeni bilgi: There is + a. Türkçede 'var' sonda." },
+    { en: "There are three chairs in the room.", tr: "Odada üç sandalye var.", note: "Çoğul isim → There are." },
+    { en: "It is five o'clock and it is raining.", tr: "Saat beş ve yağmur yağıyor.", note: "Zaman ve hava durumunda özne It olur." },
+  ],
+  snippet: {
+    title: "Yeni eve taşınma",
+    lines: [
+      { who: "A", text: "Is your new flat big?" },
+      { who: "B", text: "Not really. There are two rooms and a small kitchen." },
+      { who: "A", text: "Do you have a balcony?" },
+      { who: "B", text: "Yes, I've got a tiny one. It's perfect for coffee!" },
+    ],
+    explanation:
+      "'Is your new flat big?' be fiilinin sorusu: do/does yok. 'There are two rooms' evde neler olduğunu (varlık) anlatır, yeni bilgi verir. 'Do you have a balcony?' ve 'I've got a tiny one' sahipliği iki farklı biçimde söyler. 'It's perfect' ise az önce bahsedilen, bilinen balkonu tanımlar.",
+  },
+  questions: [
+    pick("___ a restaurant near here?", ["Is there", "There is", "Is it"], "Is there", "Varlık sorarken Is there ...? kullanılır."),
+    fix("She have two brothers.", "She has two brothers", "he/she/it ile have → has."),
+    f("They ___ (be) at school now.", "are", "they → are."),
+    f("There ___ (be) three books on the desk.", "are", "Çoğul isim → there are.", ["are"]),
+    pick("___ you have breakfast every day?", ["Are", "Do", "Have"], "Do", "Eylem anlamında have, do ile soru yapar."),
+    fix("Is cold today.", "It is cold today", "Hava durumunda özne It atlanamaz."),
+    f("He ___ (not / be) a doctor.", "isn't", "Be'nin olumsuzu: isn't/is not.", ["is not"]),
+    pick("I ___ my homework in the evening.", ["make", "do", "am"], "do", "do homework kalıbı."),
+    f("___ she ___ (have) a car? (Do/Does)", "Does she have", "he/she/it ile soru: Does + have."),
+    fix("I am agree with you.", "I agree with you", "agree fiildir; am/is/are almaz."),
+    pick("___ is 7 o'clock.", ["There", "It", "He"], "It", "Saat ve zamanda It kullanılır."),
+    f("There ___ (not / be) any milk in the fridge.", "isn't", "Sayılamayan isim (milk) → there isn't any.", ["is not"]),
+    pick("Hangisi doğru?", ["There is a cat in the garden.", "Is a cat in the garden.", "It is a cat in the garden."], "There is a cat in the garden.", "Yeni bir şeyin varlığı: There is + a."),
+    f("My parents ___ (have) a house by the sea.", "have", "they/çoğul özne → have."),
+    { prompt: "'There is/are' ile odanı tarif eden bir cümle kur.", answer: "Örn: There is a bed and there are two shelves in my room.", open: true },
+  ],
+};
+
 const pastContinuous: GrammarTopic = {
   id: "past-continuous",
-  title: "4. Past Continuous & Past Simple Farkı",
+  title: "5. Past Continuous & Past Simple",
   level: "Orta",
   summary: "Geçmişte süren arka plan eylemi ile araya giren olay",
   focus:
     "Past continuous for a background action in progress and past simple for the shorter event that interrupted it (was/were + -ing vs. -ed)",
   sections: [
     {
-      title: "Ne zaman kullanılır? / When do we use it?",
+      title: "When to Use / Ne Zaman Kullanılır",
       points: [
         "Past Continuous: an action in progress at a moment in the past. → Geçmişte belli bir anda SÜREN eylem: At 8 pm I was cooking.",
         "Past Simple: a finished, shorter event. → Biten, kısa olay: The phone rang.",
@@ -238,18 +340,18 @@ const pastContinuous: GrammarTopic = {
       ],
     },
     {
-      title: "Yapı / Form",
+      title: "Form & Structure / Yapı",
       points: [
-        "Olumlu: was/were + fiil-ing. She was reading. (O okuyordu.)",
-        "Olumsuz: wasn't/weren't + fiil-ing. They weren't sleeping. (Uyumuyorlardı.)",
-        "Soru: Was/Were + özne + fiil-ing? Were you working? (Çalışıyor muydun?)",
-        "I/he/she/it → was; you/we/they → were.",
+        "Positive: was/were + verb-ing. → Olumlu: She was reading. (O okuyordu.)",
+        "Negative: wasn't/weren't + verb-ing. → Olumsuz: They weren't sleeping. (Uyumuyorlardı.)",
+        "Question: Was/Were + subject + verb-ing? → Soru: Were you working? (Çalışıyor muydun?)",
+        "I/he/she/it → was; you/we/they → were. → Özneye göre was/were seçilir.",
       ],
     },
     {
       title: "Durum fiilleri / Stative verbs",
       points: [
-        "know, like, want, believe gibi durum fiilleri genelde -ing almaz: I knew the answer (✓), I was knowing (✗).",
+        "Stative verbs (know, like, want, believe) normally have no -ing form: I knew the answer ✓, I was knowing ✗. → Durum fiilleri genelde -ing almaz.",
       ],
     },
   ],
@@ -267,13 +369,13 @@ const pastContinuous: GrammarTopic = {
   ],
   examples: [
     { en: "I was walking home when it started to rain.", tr: "Eve yürüyordum ki yağmur başladı.", note: "Süren: was walking. Araya giren: started." },
-    { en: "She was cooking when the phone rang.", tr: "O yemek yaparken telefon çaldı." },
-    { en: "They were playing football at 5 o'clock.", tr: "Saat beşte futbol oynuyorlardı." },
-    { en: "While we were eating, the lights went out.", tr: "Biz yemek yerken ışıklar gitti." },
-    { en: "What were you doing at 9 last night?", tr: "Dün gece dokuzda ne yapıyordun?" },
-    { en: "I wasn't listening, so I missed the news.", tr: "Dinlemiyordum, bu yüzden haberi kaçırdım." },
-    { en: "He fell asleep while he was reading.", tr: "O kitap okurken uyuyakaldı." },
-    { en: "It was raining, so we stayed inside.", tr: "Yağmur yağıyordu, biz de içeride kaldık." },
+    { en: "She was cooking when the phone rang.", tr: "O yemek yaparken telefon çaldı.", note: "when + kısa olay (Past Simple)." },
+    { en: "They were playing football at 5 o'clock.", tr: "Saat beşte futbol oynuyorlardı.", note: "Geçmişte belli bir anda süren eylem." },
+    { en: "While we were eating, the lights went out.", tr: "Biz yemek yerken ışıklar gitti.", note: "while + süren eylem (Past Continuous)." },
+    { en: "What were you doing at 9 last night?", tr: "Dün gece dokuzda ne yapıyordun?", note: "Soru: Wh + was/were + özne + -ing?" },
+    { en: "I wasn't listening, so I missed the news.", tr: "Dinlemiyordum, bu yüzden haberi kaçırdım.", note: "Olumsuz: wasn't + -ing." },
+    { en: "He fell asleep while he was reading.", tr: "O kitap okurken uyuyakaldı.", note: "Kısa olay + while + süren eylem." },
+    { en: "It was raining, so we stayed inside.", tr: "Yağmur yağıyordu, biz de içeride kaldık.", note: "Arka plan durumu: was raining." },
   ],
   snippet: {
     title: "Dün akşam neredeydin?",
@@ -304,7 +406,7 @@ const pastContinuous: GrammarTopic = {
 
 const modalsIf: GrammarTopic = {
   id: "perfect-continuous-modals-if",
-  title: "7. Present Perfect Continuous, Modals & If Temelleri",
+  title: "8. Present Perfect Continuous, Modals & If Basics",
   level: "İleri",
   summary: "Süreklilik vurgusu, temel kip kalıpları ve koşul cümleleri",
   focus:
@@ -325,6 +427,9 @@ const modalsIf: GrammarTopic = {
         "can: ability/permission. → Yetenek, izin: I can swim. Can I sit here?",
         "must: strong obligation or logical certainty. → Güçlü zorunluluk/kesin çıkarım: You must wear a seatbelt. He must be tired.",
         "should: advice. → Tavsiye: You should see a doctor.",
+        "could: past ability, polite request, possibility. → Geçmiş yetenek, kibar rica, olasılık: I could swim at five. Could you help me?",
+        "have to: obligation from outside (rules, situation); must is the speaker's own feeling. → Dış zorunluluk: I have to wear a uniform. (must: kişinin kendi kararı: I must call her.)",
+        "don't have to = not necessary (≠ mustn't = forbidden). → Gerek yok ≠ yasak.",
         "might / may: possibility. → Olasılık: It might rain.",
         "Modallardan sonra YALIN fiil gelir, -s/-to almaz: She can swim (✓), She cans swims (✗).",
         "Olumsuz: cannot/can't, mustn't (yasak!), shouldn't, might not.",
@@ -361,14 +466,15 @@ const modalsIf: GrammarTopic = {
     { en: "If I were you, I'd...", tr: "Senin yerinde olsam ...yapardım" },
   ],
   examples: [
-    { en: "I have been learning English for two years.", tr: "İki yıldır İngilizce öğreniyorum." },
-    { en: "She has been working here since 2020.", tr: "O 2020'den beri burada çalışıyor." },
-    { en: "Why are your hands dirty? — I've been fixing my bike.", tr: "Ellerin neden kirli? — Bisikletimi tamir ediyordum." },
-    { en: "You should drink more water.", tr: "Daha çok su içmelisin." },
-    { en: "It might rain, so take an umbrella.", tr: "Yağmur yağabilir, şemsiye al." },
-    { en: "If it rains tomorrow, we will stay at home.", tr: "Yarın yağmur yağarsa evde kalacağız." },
-    { en: "If I had more time, I would learn French.", tr: "Daha çok zamanım olsaydı Fransızca öğrenirdim." },
-    { en: "If I were you, I would take the job.", tr: "Senin yerinde olsam o işi alırdım." },
+    { en: "I have been learning English for two years.", tr: "İki yıldır İngilizce öğreniyorum.", note: "have been + -ing + for: süreklilik." },
+    { en: "She has been working here since 2020.", tr: "O 2020'den beri burada çalışıyor.", note: "since + başlangıç noktası." },
+    { en: "Why are your hands dirty? — I've been fixing my bike.", tr: "Ellerin neden kirli? — Bisikletimi tamir ediyordum.", note: "Yeni biten eylemin görünen izi." },
+    { en: "You should drink more water.", tr: "Daha çok su içmelisin.", note: "should: tavsiye + yalın fiil." },
+    { en: "Could you open the window, please?", tr: "Pencereyi açabilir misin lütfen?", note: "could: kibar rica." },
+    { en: "I have to wear a uniform at work.", tr: "İşte üniforma giymek zorundayım.", note: "have to: dış zorunluluk." },
+    { en: "You mustn't park here.", tr: "Buraya park etmemelisin (yasak).", note: "mustn't: yasak; don't have to: gerek yok." },
+    { en: "If it rains tomorrow, we will stay at home.", tr: "Yarın yağmur yağarsa evde kalacağız.", note: "1. koşul: if + Present Simple, will." },
+    { en: "If I were you, I would take the job.", tr: "Senin yerinde olsam o işi alırdım.", note: "2. koşul: if + Past Simple (were), would." },
   ],
   snippet: {
     title: "Sınav haftası",
@@ -396,6 +502,7 @@ const modalsIf: GrammarTopic = {
     f("She ___ (not / can) come to the party.", "can't", "can'in olumsuzu can't/cannot.", ["cannot", "can not"]),
     f("What would you do if you ___ (win) the lottery?", "won", "Hayali durum: if + Past Simple."),
     f("If you ___ (hurry), you will catch the bus.", "hurry", "if'ten sonra Present Simple."),
+    pick("I ___ get up early on weekdays; it's my job.", ["have to", "mustn't", "might"], "have to", "Dış zorunluluk (iş): have to."),
     pick("It's very cloudy. It ___ rain later.", ["might", "must to", "cans"], "might", "Olasılık için might + yalın fiil."),
     { prompt: "'If I were...' ile hayali bir cümle kur.", answer: "Örn: If I were a bird, I would fly to Istanbul.", open: true },
     { prompt: "'I've been ...-ing for ...' ile kendi durumunu anlat.", answer: "Örn: I've been learning English for six months.", open: true },
@@ -404,11 +511,21 @@ const modalsIf: GrammarTopic = {
 
 export const TOPICS: GrammarTopic[] = [
   sentenceStructure,
+  beHaveDo,
   fromLesson("present-simple", "Kolay", {
-    title: "1. Present Simple",
+    title: "2. Present Simple",
+    examples: [
+      { en: "I drink tea every morning.", tr: "Her sabah çay içerim.", note: "Alışkanlık: every morning → Present Simple." },
+      { en: "She works in a hospital.", tr: "O bir hastanede çalışıyor.", note: "he/she/it → fiile -s: works." },
+      { en: "He doesn't like coffee.", tr: "O kahveyi sevmez.", note: "doesn't + yalın fiil (likes ✗)." },
+      { en: "Do they speak English?", tr: "Onlar İngilizce konuşuyor mu?", note: "Soru: Do + özne + yalın fiil." },
+      { en: "Water boils at 100 degrees.", tr: "Su 100 derecede kaynar.", note: "Genel doğru: Present Simple." },
+      { en: "The train leaves at 8:15.", tr: "Tren 8:15'te kalkar.", note: "Tarife ve program: Present Simple." },
+      { en: "My brother studies law.", tr: "Kardeşim hukuk okuyor.", note: "Sessiz + y → -ies: studies." },
+    ],
     sections: [
       {
-        title: "Ne zaman kullanılır? / When do we use it?",
+        title: "When to Use / Ne Zaman Kullanılır",
         points: [
           "Habits and routines. → Alışkanlık ve rutinler: I drink tea every morning.",
           "General truths and facts. → Genel doğrular: Water boils at 100°C.",
@@ -417,13 +534,13 @@ export const TOPICS: GrammarTopic[] = [
         ],
       },
       {
-        title: "Yapı / Form",
+        title: "Form & Structure / Yapı",
         points: [
-          "Olumlu: I/you/we/they + fiil; he/she/it + fiil-s/-es. She works. / He watches TV.",
-          "Olumsuz: don't / doesn't + yalın fiil. She doesn't work. (works ✗)",
-          "Soru: Do / Does + özne + yalın fiil? Does she work here?",
-          "-s/-es kuralı: -s, -sh, -ch, -x, -o ile biten fiillere -es (watch → watches); sessiz + y → -ies (study → studies).",
-          "Sık zarflar: always, usually, often, sometimes, never, every day.",
+          "Positive: I/you/we/they + verb; he/she/it + verb-s/-es. → Olumlu: he/she/it ile fiile -s/-es gelir. She works. / He watches TV.",
+          "Negative: don't / doesn't + base verb. → Olumsuz: doesn't'ten sonra fiil yalın kalır. She doesn't work. (works ✗)",
+          "Question: Do / Does + subject + base verb? → Soru: Does she work here?",
+          "Spelling: add -es after -s, -sh, -ch, -x, -o (watch → watches); consonant + y → -ies (study → studies). → Yazım: bu harflerle biten fiillere -es; sessiz + y → -ies.",
+          "Common adverbs: always, usually, often, sometimes, never, every day. → Sık kullanılan zarflar.",
         ],
       },
     ],
@@ -466,10 +583,19 @@ export const TOPICS: GrammarTopic[] = [
     ],
   }),
   fromLesson("present-continuous", "Kolay", {
-    title: "2. Present Continuous",
+    title: "3. Present Continuous",
+    examples: [
+      { en: "I'm reading a book right now.", tr: "Şu an kitap okuyorum.", note: "right now → Present Continuous." },
+      { en: "She isn't listening to me.", tr: "O beni dinlemiyor.", note: "Olumsuz: isn't + -ing." },
+      { en: "Are you waiting for someone?", tr: "Biri için mi bekliyorsun?", note: "Soru: Are + özne + -ing?" },
+      { en: "I'm staying with a friend this week.", tr: "Bu hafta bir arkadaşımda kalıyorum.", note: "Geçici durum: bu sıralar." },
+      { en: "It's getting colder every day.", tr: "Hava her gün soğuyor.", note: "Değişim: get + sıfat + -ing." },
+      { en: "We're meeting Ali tomorrow at five.", tr: "Yarın saat beşte Ali ile buluşuyoruz.", note: "Kesinleşmiş plan: Present Continuous." },
+      { en: "I know the answer.", tr: "Cevabı biliyorum.", note: "know durum fiili: -ing almaz (I'm knowing ✗)." },
+    ],
     sections: [
       {
-        title: "Ne zaman kullanılır? / When do we use it?",
+        title: "When to Use / Ne Zaman Kullanılır",
         points: [
           "Actions happening now. → Tam şu an olan eylemler: I'm reading now.",
           "Temporary situations around now. → Bu sıralar süren geçici durumlar: I'm staying with a friend this week.",
@@ -478,13 +604,13 @@ export const TOPICS: GrammarTopic[] = [
         ],
       },
       {
-        title: "Yapı / Form",
+        title: "Form & Structure / Yapı",
         points: [
-          "Olumlu: am/is/are + fiil-ing. She is reading.",
-          "Olumsuz: am not / isn't / aren't + fiil-ing. They aren't working.",
-          "Soru: Am/Is/Are + özne + fiil-ing? Are you listening?",
-          "Yazım: run → running, write → writing, lie → lying.",
-          "Non-progressive (durum) fiiller: know, like, want, need, love, understand, believe -ing almaz → I know him ✓, I'm knowing him ✗.",
+          "Positive: am/is/are + verb-ing. → Olumlu: She is reading.",
+          "Negative: am not / isn't / aren't + verb-ing. → Olumsuz: They aren't working.",
+          "Question: Am/Is/Are + subject + verb-ing? → Soru: Are you listening?",
+          "Spelling: run → running, write → writing, lie → lying. → Yazım: ünsüz ikilenir, sessiz e düşer.",
+          "Non-progressive (stative) verbs (know, like, want, need, love, understand, believe) normally have no -ing form. → Durum fiilleri -ing almaz: I know him ✓, I'm knowing him ✗.",
         ],
       },
     ],
@@ -527,10 +653,19 @@ export const TOPICS: GrammarTopic[] = [
     ],
   }),
   fromLesson("past-simple", "Orta", {
-    title: "3. Past Simple",
+    title: "4. Past Simple",
+    examples: [
+      { en: "I visited Izmir last year.", tr: "Geçen yıl İzmir'i ziyaret ettim.", note: "last year bitmiş zaman: -ed." },
+      { en: "She bought a new car in May.", tr: "O mayısta yeni bir araba aldı.", note: "buy → bought (düzensiz)." },
+      { en: "We didn't go to school yesterday.", tr: "Dün okula gitmedik.", note: "didn't + yalın fiil (didn't went ✗)." },
+      { en: "Did you see the match?", tr: "Maçı gördün mü?", note: "Soru: Did + özne + yalın fiil." },
+      { en: "He was tired, so he went to bed early.", tr: "Yorgundu, bu yüzden erken yattı.", note: "to be: was/were; art arda olaylar." },
+      { en: "They played football for two hours.", tr: "İki saat futbol oynadılar.", note: "played: /d/ sesiyle okunur." },
+      { en: "I wanted some water.", tr: "Biraz su istedim.", note: "wanted: /ɪd/ sesiyle okunur." },
+    ],
     sections: [
       {
-        title: "Ne zaman kullanılır? / When do we use it?",
+        title: "When to Use / Ne Zaman Kullanılır",
         points: [
           "Finished actions at a definite time in the past. → Geçmişte bitmiş olaylar: I visited Izmir last year.",
           "A series of past events. → Art arda olaylar: I woke up, ate breakfast and left.",
@@ -538,13 +673,13 @@ export const TOPICS: GrammarTopic[] = [
         ],
       },
       {
-        title: "Yapı / Form",
+        title: "Form & Structure / Yapı",
         points: [
-          "Düzenli fiiller: fiil + -ed. work → worked, study → studied, stop → stopped.",
-          "-ed okunuşu: /t/ (worked), /d/ (played), /ɪd/ (wanted, needed).",
-          "Düzensiz fiiller: go → went, buy → bought, see → saw, eat → ate, have → had.",
-          "Olumsuz: didn't + yalın fiil. I didn't go. (went ✗)",
-          "Soru: Did + özne + yalın fiil? Did you go? To be: was/were.",
+          "Regular verbs: verb + -ed. → Düzenli fiiller: work → worked, study → studied, stop → stopped.",
+          "-ed sounds: /t/ (worked), /d/ (played), /ɪd/ (wanted, needed). → -ed üç farklı sesle okunur.",
+          "Irregular verbs have their own past forms: go → went, buy → bought, see → saw. → Düzensiz fiiller ezberlenir.",
+          "Negative: didn't + base verb. → Olumsuz: didn't'ten sonra yalın fiil. I didn't go. (went ✗)",
+          "Question: Did + subject + base verb? → Soru: Did you go? (to be: was/were)",
         ],
       },
     ],
@@ -588,7 +723,16 @@ export const TOPICS: GrammarTopic[] = [
   }),
   pastContinuous,
   fromLesson("future-going-to-will", "Orta", {
-    title: "5. Future: Going to, Will ve Present Continuous",
+    title: "6. Future: Going to, Will & Present Continuous",
+    examples: [
+      { en: "I'm going to study tonight.", tr: "Bu akşam ders çalışacağım.", note: "Önceden verilmiş karar: going to." },
+      { en: "Look at the clouds! It's going to rain.", tr: "Bulutlara bak! Yağmur yağacak.", note: "Kanıta dayalı tahmin: going to." },
+      { en: "The phone's ringing. I'll get it.", tr: "Telefon çalıyor. Ben açarım.", note: "Anlık karar/teklif: will." },
+      { en: "I think she will pass the exam.", tr: "Bence sınavı geçecek.", note: "Kanıtsız görüş: I think + will." },
+      { en: "I promise I won't be late.", tr: "Söz veriyorum geç kalmayacağım.", note: "Söz: will / won't." },
+      { en: "I'm seeing the dentist on Monday at 3.", tr: "Pazartesi saat 3'te dişçiye gidiyorum.", note: "Randevu/ayarlanmış plan: Present Continuous." },
+      { en: "Will you open the window, please?", tr: "Pencereyi açar mısın lütfen?", note: "Rica: Will you...?" },
+    ],
     sections: [
       {
         title: "Üç yapı, üç anlam / Three forms, three meanings",
@@ -599,11 +743,11 @@ export const TOPICS: GrammarTopic[] = [
         ],
       },
       {
-        title: "Yapı / Form",
+        title: "Form & Structure / Yapı",
         points: [
-          "going to: am/is/are + going to + yalın fiil. Soru: Are you going to...?",
-          "will: will + yalın fiil, olumsuz won't. Soru: Will you...? (rica/teklif)",
-          "Fark: I'm going to call him (karar verdim) / I'll call him (şimdi karar veriyorum) / I'm calling him at 6 (saat ayarladım).",
+          "going to: am/is/are + going to + base verb. → Soru: Are you going to...?",
+          "will: will + base verb; negative: won't. → Olumsuz won't; Will you...? rica/teklif içindir.",
+          "Compare: I'm going to call him (already decided) / I'll call him (deciding now) / I'm calling him at 6 (arranged). → Karar verdim / şimdi karar veriyorum / saati ayarladım.",
         ],
       },
     ],
@@ -646,10 +790,19 @@ export const TOPICS: GrammarTopic[] = [
     ],
   }),
   fromLesson("present-perfect", "Zor", {
-    title: "6. Present Perfect & Past Simple Farkı",
+    title: "7. Present Perfect vs. Past Simple",
+    examples: [
+      { en: "I've lost my keys.", tr: "Anahtarlarımı kaybettim (şu an yok).", note: "Şu anki sonuç var: Present Perfect." },
+      { en: "I lost my keys yesterday.", tr: "Anahtarlarımı dün kaybettim.", note: "yesterday: Past Simple." },
+      { en: "Have you ever been to Rome?", tr: "Hiç Roma'da bulundun mu?", note: "Hayat deneyimi: ever + Present Perfect." },
+      { en: "She has already eaten lunch.", tr: "O öğle yemeğini zaten yedi.", note: "already: olumlu cümlede." },
+      { en: "I haven't seen that film yet.", tr: "O filmi henüz izlemedim.", note: "yet: olumsuz ve soruda." },
+      { en: "We have lived here for ten years.", tr: "On yıldır burada yaşıyoruz.", note: "for + süre." },
+      { en: "He has worked here since 2021.", tr: "O 2021'den beri burada çalışıyor.", note: "since + başlangıç zamanı." },
+    ],
     sections: [
       {
-        title: "Ne zaman hangisi? / Which one?",
+        title: "When to Use Which / Ne Zaman Hangisi",
         points: [
           "Present Perfect (have/has + past participle): past action connected to now — experience, result, unfinished time. → Bugünle bağlantılı geçmiş: I've lost my keys (şu an yok). Have you ever been to Rome?",
           "Past Simple: finished action at a definite past time. → Bitmiş, zamanı belli: I lost my keys yesterday.",
@@ -658,12 +811,12 @@ export const TOPICS: GrammarTopic[] = [
         ],
       },
       {
-        title: "Yapı / Form",
+        title: "Form & Structure / Yapı",
         points: [
-          "Olumlu: have/has + V3. She has finished.",
-          "Olumsuz: haven't/hasn't + V3. I haven't seen it yet.",
-          "Soru: Have/Has + özne + V3? Have you ever tried sushi?",
-          "Zaman belirtilirse (yesterday, last week) Present Perfect KULLANILMAZ: I have seen him yesterday ✗ → I saw him yesterday ✓.",
+          "Positive: have/has + past participle. → Olumlu: She has finished.",
+          "Negative: haven't/hasn't + past participle. → Olumsuz: I haven't seen it yet.",
+          "Question: Have/Has + subject + past participle? → Soru: Have you ever tried sushi?",
+          "With a finished time (yesterday, last week) do NOT use Present Perfect: I saw him yesterday ✓. → Bitmiş zaman belirtilirse Past Simple kullanılır: I have seen him yesterday ✗.",
         ],
       },
     ],

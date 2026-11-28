@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
+import type { Question, Snippet } from "@/data/grammar";
 
 const KEY = "grammar-state-v1";
 
@@ -13,6 +14,10 @@ type Stored = {
   /** Last day autoDays was brought up to date. */
   lastDate: string;
   paused: boolean;
+  /** AI-generated questions appended after the local ones, per topic. */
+  extras: Record<string, Question[]>;
+  /** AI-generated conversation snippets, per topic. */
+  snippets: Record<string, Snippet[]>;
 };
 
 export type GrammarState = Stored & { today: string; days: number };
@@ -33,6 +38,12 @@ function daysBetween(from: string, to: string) {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
+function obj<T>(v: unknown): Record<string, T[]> {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, T[]>)
+    : {};
+}
+
 function fresh(): Stored {
   return {
     completed: [],
@@ -40,6 +51,8 @@ function fresh(): Stored {
     autoDays: 0,
     lastDate: todayStr(),
     paused: false,
+    extras: {},
+    snippets: {},
   };
 }
 
@@ -65,6 +78,8 @@ function readStored(): Stored {
         autoDays: typeof p.autoDays === "number" ? p.autoDays : 0,
         lastDate,
         paused: p.paused === true,
+        extras: obj(p.extras),
+        snippets: obj(p.snippets),
       };
     }
     const f = fresh();
@@ -121,6 +136,16 @@ export const grammarActions = {
     const s = rolled(readStored());
     save({ ...s, manual: { ...s.manual, [id]: (s.manual[id] ?? 0) + 1 } });
   },
+  addExtras(id: string, qs: Question[]) {
+    const s = rolled(readStored());
+    const list = [...(s.extras[id] ?? []), ...qs].slice(-60);
+    save({ ...s, extras: { ...s.extras, [id]: list } });
+  },
+  addSnippet(id: string, sn: Snippet) {
+    const s = rolled(readStored());
+    const list = [...(s.snippets[id] ?? []), sn].slice(-5);
+    save({ ...s, snippets: { ...s.snippets, [id]: list } });
+  },
   /** Pausing freezes the daily counter; resuming restarts it from today. */
   setPaused(paused: boolean) {
     const s = rolled(readStored());
@@ -138,6 +163,8 @@ export function useGrammarState(): GrammarState & { ready: boolean } {
         autoDays: 0,
         lastDate: "",
         paused: false,
+        extras: {},
+        snippets: {},
         today: "",
         days: 0,
         ready: false,
