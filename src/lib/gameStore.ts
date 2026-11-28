@@ -90,6 +90,11 @@ export const gameActions = {
       xp: s.xp + 10 + Math.min(combo - 1, 5) * 2,
     });
   },
+  /** Finished with a hint or the shown answer: participation XP, no combo. */
+  assisted() {
+    const s = touched(read());
+    save({ ...s, combo: 0, xp: s.xp + 5 });
+  },
   wrong() {
     const s = touched(read());
     save({ ...s, combo: 0 });

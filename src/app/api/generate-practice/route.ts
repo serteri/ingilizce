@@ -1,4 +1,11 @@
 import { TOPICS, type Question } from "@/data/grammar";
+import {
+  englishOf,
+  ROLES,
+  RULES,
+  sentenceKey,
+  type Sentence,
+} from "@/data/sentences";
 import { callGemini, geminiKey } from "@/lib/gemini";
 
 const QUESTIONS_SCHEMA = {
@@ -43,6 +50,29 @@ const SNIPPET_SCHEMA = {
   required: ["title", "dialogue", "explanation"],
 };
 
+const SENTENCES_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    sentences: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          s: { type: "STRING" },
+          v: { type: "STRING" },
+          o: { type: "STRING" },
+          m: { type: "STRING" },
+          p: { type: "STRING" },
+          t: { type: "STRING" },
+          tr: { type: "STRING" },
+        },
+        required: ["s", "v", "o", "m", "p", "t", "tr"],
+      },
+    },
+  },
+  required: ["sentences"],
+};
+
 function str(v: unknown, max = 400) {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
@@ -80,6 +110,34 @@ function cleanQuestions(raw: unknown): Question[] {
   return out.slice(0, 3);
 }
 
+/** Keeps complete, unseen sentences with at least three blocks. */
+function cleanSentences(raw: unknown, avoid: string[]): Sentence[] {
+  const list = (raw as { sentences?: unknown } | null)?.sentences;
+  if (!Array.isArray(list)) return [];
+  const seen = new Set(avoid.map((x) => x.toLowerCase()));
+  const out: Sentence[] = [];
+  for (const item of list) {
+    const o = (item ?? {}) as Record<string, unknown>;
+    const part = (k: string) => str(o[k], 60).replace(/[.!?]+$/, "");
+    const x: Sentence = {
+      s: part("s"),
+      v: part("v"),
+      o: part("o"),
+      m: part("m"),
+      p: part("p"),
+      t: part("t"),
+      tr: str(o.tr, 200),
+    };
+    if (!x.s || !x.v || !x.tr) continue;
+    if (ROLES.filter((r) => x[r]).length < 3 || englishOf(x).includes("?")) continue;
+    const key = sentenceKey(x);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(x);
+  }
+  return out.slice(0, 5);
+}
+
 export async function POST(request: Request) {
   const apiKey = geminiKey();
   if (!apiKey) {
@@ -97,8 +155,11 @@ export async function POST(request: Request) {
   }
 
   const kind = body.kind;
-  if (kind !== "questions" && kind !== "snippet") {
-    return Response.json({ error: "kind must be questions or snippet" }, { status: 400 });
+  if (kind !== "questions" && kind !== "snippet" && kind !== "svompt_sentences") {
+    return Response.json(
+      { error: "kind must be questions, snippet or svompt_sentences" },
+      { status: 400 },
+    );
   }
   const known = TOPICS.find((t) => t.id === body.topicId);
   const title = known?.title ?? str(body.title, 120);
@@ -111,6 +172,30 @@ export async function POST(request: Request) {
   const context = `Grammar topic: ${title}\nLevel: ${level}\nFocus: ${focus}`;
 
   try {
+    if (kind === "svompt_sentences") {
+      const avoid = Array.isArray(body.avoid)
+        ? body.avoid.slice(-60).map((x) => str(x, 200)).filter(Boolean)
+        : [];
+      const rule = known ? RULES[known.id]?.en : "";
+      const r = await callGemini(
+        apiKey,
+        `You write word-order practice for a Turkish-speaking English learner. ${context}
+Rule being practised: ${rule}
+Write exactly 5 NEW, natural, everyday English STATEMENTS (no questions) that use this grammar. Split each into blocks that read correctly in the fixed order s, v, o, m, p, t:
+"s" subject, "v" the whole verb phrase including auxiliaries and negation, "o" object or complement, "m" manner, "p" place, "t" time expression or time clause. Use "" for a missing block, fill at least 3 blocks, and add no final punctuation. Joining the non-empty blocks with spaces must give a correct sentence with no other natural order needed. "tr": natural Turkish translation. Vary subjects, verbs and situations. Do not repeat: ${avoid.join(" | ")}`,
+        SENTENCES_SCHEMA,
+        1,
+      );
+      const sentences = cleanSentences(r.data, avoid);
+      if (!sentences.length) {
+        return Response.json({
+          configured: true,
+          warning: `No usable sentences (status ${r.status})`,
+        });
+      }
+      return Response.json({ configured: true, sentences });
+    }
+
     if (kind === "questions") {
       const avoid = (known?.questions ?? [])
         .slice(0, 8)

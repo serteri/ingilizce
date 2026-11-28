@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { SoundWave, Sparks } from "@/components/anim/Effects";
 import Reveal from "@/components/anim/Reveal";
-import SentenceBuilder from "@/components/SentenceBuilder";
-import SentenceScene from "@/components/SentenceScene";
+import SentenceArena from "@/components/SentenceArena";
 import TenseTimeline from "@/components/TenseTimeline";
 import WordOrderBlocks from "@/components/WordOrderBlocks";
 import {
@@ -558,7 +557,7 @@ export default function GrammarSection({
         )}
 
         <Reveal>
-          <SentenceScene items={topic.examples} />
+          <SentenceArena topicId={topic.id} />
         </Reveal>
 
         <Reveal>
@@ -632,10 +631,6 @@ export default function GrammarSection({
             ))}
           </ul>
         </section>
-        </Reveal>
-
-        <Reveal>
-          <SentenceBuilder key={topic.id} items={topic.examples} />
         </Reveal>
 
         <section className="space-y-3">
