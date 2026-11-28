@@ -224,15 +224,15 @@ button:not(:disabled):active { transform: scale(0.95); }
 .fig-live .fig-mouth, .fig-burst .fig-mouth { transform-origin: 43px 34px; animation: figTalk 0.32s ease-in-out infinite; }
 .fig-burst .fig-mouth { animation-iteration-count: 12; }
 .bubble { animation: bubbleIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-.bubble-left { transform-origin: left center; }
-.bubble-right { transform-origin: right center; }
-/* Tail pointing at the speaker. */
-.bubble-left::after, .bubble-right::after {
-  content: ""; position: absolute; top: 50%; width: 12px; height: 12px;
-  background: inherit; border: inherit; border-width: 0 0 2px 2px;
+/* Tail pointing down at the speaker. */
+.bubble-a { transform-origin: 25% bottom; }
+.bubble-b { transform-origin: 75% bottom; }
+.bubble-a::after, .bubble-b::after {
+  content: ""; position: absolute; bottom: -7px; width: 12px; height: 12px;
+  background: inherit; border: inherit; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
-.bubble-left::after { left: -7px; transform: translateY(-50%) rotate(45deg); }
-.bubble-right::after { right: -7px; transform: translateY(-50%) rotate(225deg); }
+.bubble-a::after { left: 26px; }
+.bubble-b::after { right: 26px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

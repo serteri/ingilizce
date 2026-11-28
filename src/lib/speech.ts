@@ -16,7 +16,11 @@ export function stopSpeech() {
 export function speakLines(
   lines: { who: string; text: string }[],
   onError: (msg: string) => void,
-  events?: { onLine: (index: number) => void; onDone: () => void },
+  events?: {
+    onLine: (index: number) => void;
+    /** "cancel" means reading was stopped or replaced before it finished. */
+    onDone: (reason: "end" | "cancel" | "error") => void;
+  },
 ) {
   if (!supported()) {
     onError("Bu tarayıcı sesli okumayı desteklemiyor.");
@@ -25,13 +29,13 @@ export function speakLines(
   try {
     stopSpeech();
     let live = true;
-    const finish = () => {
+    const finish = (reason: "end" | "cancel" | "error") => {
       if (!live) return;
       live = false;
       release = null;
-      events?.onDone();
+      events?.onDone(reason);
     };
-    release = finish;
+    release = () => finish("cancel");
     events?.onLine(0);
     queue = lines.map((l, i) => {
       const u = new SpeechSynthesisUtterance(l.text);
@@ -42,8 +46,9 @@ export function speakLines(
       u.onstart = () => {
         if (live) events?.onLine(i);
       };
-      u.onerror = finish;
-      if (i === lines.length - 1) u.onend = finish;
+      u.onerror = (e) =>
+        finish(e.error === "interrupted" || e.error === "canceled" ? "cancel" : "error");
+      if (i === lines.length - 1) u.onend = () => finish("end");
       return u;
     });
     queue.forEach((u) => window.speechSynthesis.speak(u));

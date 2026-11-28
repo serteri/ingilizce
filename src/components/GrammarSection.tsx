@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { SoundWave, Sparks } from "@/components/anim/Effects";
-import DialogueStage from "@/components/anim/DialogueStage";
+import DialogueStage, {
+  speakerOf,
+  type Speaker,
+} from "@/components/anim/DialogueStage";
 import Reveal from "@/components/anim/Reveal";
-import SentenceArena from "@/components/SentenceArena";
+import PracticeStage from "@/components/PracticeStage";
 import TenseTimeline from "@/components/TenseTimeline";
 import WordOrderBlocks from "@/components/WordOrderBlocks";
 import {
@@ -266,10 +269,6 @@ function Mistakes({ items }: { items: NonNullable<GrammarTopic["mistakes"]> }) {
   );
 }
 
-function speakerOf(who?: string) {
-  return who === "B" ? "B" : "A";
-}
-
 function SnippetBox({
   snippet,
   badge,
@@ -286,6 +285,31 @@ function SnippetBox({
 
   // Stop reading when the card goes away (e.g. topic change).
   useEffect(() => stopSpeech, []);
+
+  /** The latest line of one speaker up to the line being read. */
+  function bubble(who: Speaker) {
+    if (active === null) {
+      return who === "A"
+        ? { id: "idle", body: "🔊 “Tümünü Dinle” ile konuşmayı canlandır." }
+        : null;
+    }
+    const at = snippet.lines
+      .slice(0, active + 1)
+      .findLastIndex((l) => speakerOf(l.who) === who);
+    if (at < 0) return null;
+    const l = snippet.lines[at];
+    return {
+      id: `${at}`,
+      body: (
+        <>
+          <span className="block font-medium">{l.text}</span>
+          {showTr && l.tr && (
+            <span className="mt-1 block text-xs text-slate-500">{l.tr}</span>
+          )}
+        </>
+      ),
+    };
+  }
 
   function read(from: number, only = false) {
     const lines = only ? [snippet.lines[from]] : snippet.lines;
@@ -307,23 +331,9 @@ function SnippetBox({
       <DialogueStage
         speaker={active === null ? null : speakerOf(snippet.lines[active]?.who)}
         talk="live"
-        bubbleKey={String(active)}
-      >
-        {active === null || !snippet.lines[active] ? (
-          <span className="text-slate-500">
-            🔊 “Tümünü Dinle” ile konuşmayı canlandır.
-          </span>
-        ) : (
-          <>
-            <span className="font-medium">{snippet.lines[active].text}</span>
-            {showTr && snippet.lines[active].tr && (
-              <span className="mt-1 block text-xs text-slate-500">
-                {snippet.lines[active].tr}
-              </span>
-            )}
-          </>
-        )}
-      </DialogueStage>
+        a={bubble("A")}
+        b={bubble("B")}
+      />
       <ul className="space-y-1.5 text-sm">
         {snippet.lines.map((l, i) => (
           <li
@@ -582,7 +592,7 @@ export default function GrammarSection({
         )}
 
         <Reveal>
-          <SentenceArena topicId={topic.id} />
+          <PracticeStage topicId={topic.id} />
         </Reveal>
 
         <Reveal>

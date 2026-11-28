@@ -65,6 +65,8 @@ function Round({
   const [checked, setChecked] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  // Short reminder when "Kontrol Et" cannot judge yet; n replays the shake.
+  const [warning, setWarning] = useState({ n: 0, text: "" });
   const reading = useRef(false);
   // Screen positions of blocks about to move, so they can fly to the slots.
   const flights = useRef(new Map<Role, DOMRect>());
@@ -128,6 +130,8 @@ function Round({
     setResult(how);
     if (how === "self") gameActions.correct();
     else gameActions.assisted();
+    // B says the finished sentence; runs inside the click so audio may start.
+    if (how !== "shown") act();
     onDone();
   }
 
@@ -135,10 +139,24 @@ function Round({
   function update(next: (Role | null)[]) {
     setSlots(next);
     setChecked(false);
+    setWarning({ n: 0, text: "" });
   }
 
   function check() {
-    if (result || checked || !full) return;
+    if (result) return;
+    if (!full || checked) {
+      const empty = slots.filter((r) => !r).length;
+      setWarning((w) => ({
+        n: w.n + 1,
+        text: full
+          ? "Önce sarsılan blokların yerini değiştir."
+          : empty === slots.length
+            ? "Önce bloklara tıklayarak cümleni kur."
+            : `Cümle henüz tamam değil: ${empty} blok daha yerleştir.`,
+      }));
+      return;
+    }
+    setWarning({ n: 0, text: "" });
     onTouch();
     setChecked(true);
     if (slots.every((r, i) => r === roles[i])) {
@@ -197,6 +215,9 @@ function Round({
   const started = slots.some(Boolean);
   // A asks, B (the learner) answers; A steps back in after a wrong check.
   const speaker = solved ? "B" : wrong || !started ? "A" : "B";
+  // Role letters and colours stay hidden until a hint or the solution.
+  const tagged = solved || hinted.length > 0;
+  const plain = "border-slate-300 bg-white text-slate-900";
 
   return (
     <div
@@ -211,32 +232,47 @@ function Round({
               : "border-slate-200 bg-slate-50"
       }`}
     >
-      <div className="anim-item" style={{ ["--i" as string]: 1 }}>
-        <p data-target className="text-base font-semibold text-slate-900">
-          🇹🇷 {sentence.tr}
-        </p>
-        <p className="mt-1 text-xs text-slate-600">
-          Hedef kalıp:{" "}
-          <b>{roles.map((r) => ROLE_INFO[r].tag).join(" + ")}</b> · Blokları sırayla
-          tıklayarak cümleyi kur.
-        </p>
-      </div>
+      <p className="anim-item text-xs text-slate-600" style={{ ["--i" as string]: 1 }}>
+        A’nın sorusunu blokları sırayla tıklayarak yanıtla, sonra “Kontrol Et”.
+        {tagged && (
+          <span className="ml-1">
+            Hedef kalıp: <b>{roles.map((r) => ROLE_INFO[r].tag).join(" + ")}</b>
+          </span>
+        )}
+      </p>
 
       <DialogueStage
         speaker={speaker}
         talk={speaking ? "live" : solved || !started || wrong ? "burst" : "still"}
-        bubbleKey={`${speaker}-${solved}-${wrong}-${started}`}
-      >
-        {solved ? (
-          <span className="text-base font-semibold">“{englishOf(sentence)}”</span>
-        ) : wrong ? (
-          "Hmm, olmadı. Bir daha bakalım!"
-        ) : started ? (
-          <span className="font-medium">{attempt}</span>
-        ) : (
-          "Bunu İngilizce nasıl söylersin?"
-        )}
-      </DialogueStage>
+        a={{
+          id: wrong ? `again-${misses}` : "ask",
+          body: (
+            <>
+              {wrong && <span className="block font-medium">Hmm, olmadı!</span>}
+              <span data-target className="block font-semibold">
+                🇹🇷 {sentence.tr}
+              </span>
+              <span className="mt-1 block text-xs text-slate-500">
+                Bunu İngilizce nasıl söylersin?
+              </span>
+            </>
+          ),
+        }}
+        b={
+          solved
+            ? {
+                id: "answer",
+                body: (
+                  <span className="block text-base font-semibold">
+                    “{englishOf(sentence)}”
+                  </span>
+                ),
+              }
+            : started
+              ? { id: "try", body: <span className="font-medium">{attempt}</span> }
+              : null
+        }
+      />
 
       {/* Slots */}
       <ol
@@ -252,7 +288,7 @@ function Round({
               className="flex min-h-16 min-w-24 flex-col items-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-white p-1.5"
             >
               <span className="text-[10px] font-semibold uppercase text-slate-500">
-                {ROLE_INFO[expected].tag} · {ROLE_INFO[expected].label}
+                {tagged ? `${ROLE_INFO[expected].tag} · ${ROLE_INFO[expected].label}` : `${i + 1}.`}
               </span>
               {role && (
                 <button
@@ -260,7 +296,11 @@ function Round({
                   onClick={() => remove(i)}
                   aria-label={`${sentence[role]}${bad ? " (yanlış yerde)" : ""}`}
                   className={`relative z-10 rounded-lg border-2 px-3 py-1.5 text-sm font-bold ${
-                    bad ? "border-rose-600 bg-rose-500 text-white" : ROLE_INFO[role].cls
+                    bad
+                      ? "border-rose-600 bg-rose-500 text-white"
+                      : tagged
+                        ? ROLE_INFO[role].cls
+                        : plain
                   } ${hinted.includes(role) ? "ring-2 ring-amber-400" : ""}`}
                 >
                   <span
@@ -290,11 +330,13 @@ function Round({
                 data-block={r}
                 onClick={() => place(r)}
                 disabled={full}
-                className={`relative z-10 rounded-lg border-2 px-3 py-1.5 text-sm font-bold shadow-sm hover:-translate-y-0.5 hover:shadow-md ${ROLE_INFO[r].cls}`}
+                className={`relative z-10 rounded-lg border-2 px-3 py-1.5 text-sm font-bold shadow-sm hover:-translate-y-0.5 hover:shadow-md ${tagged ? ROLE_INFO[r].cls : plain}`}
               >
-                <span className="mr-1.5 rounded bg-white/80 px-1 text-[10px]">
-                  {ROLE_INFO[r].tag}
-                </span>
+                {tagged && (
+                  <span className="mr-1.5 rounded bg-white/80 px-1 text-[10px]">
+                    {ROLE_INFO[r].tag}
+                  </span>
+                )}
                 {sentence[r]}
               </button>
             ))}
@@ -308,8 +350,13 @@ function Round({
             {slots.map((r, i) =>
               r && r !== roles[i] ? (
                 <span key={r} className="block font-normal">
-                  ✗ “{sentence[r]}” ({ROLE_INFO[r].label}) {i + 1}. sırada olmaz; bu yuva{" "}
-                  <b>{ROLE_INFO[roles[i]].label}</b> için.
+                  ✗ “{sentence[r]}” {i + 1}. sırada olmaz
+                  {tagged && (
+                    <>
+                      ; bu yuva <b>{ROLE_INFO[roles[i]].label}</b> için
+                    </>
+                  )}
+                  .
                 </span>
               ) : null,
             )}
@@ -339,6 +386,16 @@ function Round({
         )}
       </div>
 
+      {warning.text && !solved && (
+        <p
+          key={warning.n}
+          role="alert"
+          className="anim-shake rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900"
+        >
+          ⚠️ {warning.text}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {solved ? (
           <button onClick={onNext} className={`${small} bg-blue-600 text-white hover:bg-blue-500`}>
@@ -348,8 +405,7 @@ function Round({
           <>
             <button
               onClick={check}
-              disabled={!full || checked}
-              className={`${small} bg-emerald-600 text-white hover:bg-emerald-500 disabled:cursor-not-allowed`}
+              className={`${small} bg-emerald-600 text-white shadow-md hover:bg-emerald-500`}
             >
               ✔ Kontrol Et
             </button>
@@ -491,11 +547,9 @@ export default function SentenceArena({ topicId }: { topicId: string }) {
   }
 
   return (
-    <section className="space-y-3">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Sentence Scene / Cümle Dizilim Sahnesi
-        </h3>
+        <p className="text-sm font-semibold text-slate-700">Cümleyi sen kur</p>
         <button
           onClick={() => void newSet(false)}
           disabled={busy}
@@ -524,6 +578,6 @@ export default function SentenceArena({ topicId }: { topicId: string }) {
           onNext={next}
         />
       </div>
-    </section>
+    </div>
   );
 }
