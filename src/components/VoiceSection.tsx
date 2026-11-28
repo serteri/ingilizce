@@ -39,7 +39,7 @@ export default function VoiceSection({
   return (
     <div className="mx-auto max-w-xl space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       {active ? (
-        <div className="flex flex-col items-center gap-3">
+        <div className="anim-scene flex flex-col items-center gap-3">
           <VoiceSession
             lessonId={active.lessonId}
             stage={active.stage}
@@ -51,7 +51,7 @@ export default function VoiceSection({
           />
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="anim-scene space-y-5">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
               Sesli Konuşma
@@ -70,11 +70,12 @@ export default function VoiceSection({
               {[
                 ...LESSONS.map((l) => ({ id: l.id, title: l.title })),
                 { id: FREE, title: "Serbest sohbet" },
-              ].map((l) => (
+              ].map((l, i) => (
                 <button
                   key={l.id}
+                  style={{ ["--i" as string]: i }}
                   onClick={() => setLessonId(l.id)}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                  className={`anim-item rounded-full border px-3 py-1.5 text-sm transition ${
                     lessonId === l.id
                       ? "border-blue-500 bg-blue-50 text-blue-700"
                       : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
@@ -87,12 +88,13 @@ export default function VoiceSection({
           </div>
 
           {!free && (
-            <div className="grid gap-2 sm:grid-cols-3">
-              {STAGE_OPTIONS.map((o) => (
+            <div key={lessonId} className="grid gap-2 sm:grid-cols-3">
+              {STAGE_OPTIONS.map((o, i) => (
                 <button
                   key={o.stage}
+                  style={{ ["--i" as string]: i }}
                   onClick={() => setStage(o.stage)}
-                  className={`rounded-xl border p-3 text-left transition ${
+                  className={`anim-item rounded-xl border p-3 text-left transition ${
                     stage === o.stage
                       ? "border-blue-500 bg-blue-50"
                       : "border-slate-200 bg-slate-50 hover:border-slate-400"

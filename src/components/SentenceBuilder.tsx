@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Sparks } from "@/components/anim/Effects";
 import type { Example } from "@/data/grammar";
 import { gameActions } from "@/lib/gameStore";
+import { reducedMotion } from "@/lib/motion";
 
 function norm(s: string) {
   return s
@@ -34,6 +36,35 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
   const [picked, setPicked] = useState<number[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [hint, setHint] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+  // Where the tapped word was, so it can fly to its new place.
+  const flight = useRef<{ to: string; from: DOMRect } | null>(null);
+
+  useLayoutEffect(() => {
+    const f = flight.current;
+    flight.current = null;
+    if (!f || reducedMotion()) return;
+    const el = root.current?.querySelector<HTMLElement>(`[data-fly="${f.to}"]`);
+    if (!el) return;
+    const now = el.getBoundingClientRect();
+    const dx = f.from.x - now.x;
+    const dy = f.from.y - now.y;
+    el.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px)` },
+        {
+          transform: `translate(${dx * 0.4}px, ${dy * 0.4 - 26}px) scale(1.25) rotate(-4deg)`,
+          offset: 0.55,
+        },
+        { transform: "none" },
+      ],
+      { duration: 520, easing: "cubic-bezier(0.34, 1.3, 0.64, 1)" },
+    );
+  }, [picked]);
+
+  function launch(to: string, el: HTMLElement) {
+    flight.current = { to, from: el.getBoundingClientRect() };
+  }
 
   if (usable.length === 0) return null;
   const ex = usable[n % usable.length];
@@ -90,11 +121,12 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
         Cümle Kur · Sentence Builder
       </h3>
       <div
-        className={`space-y-3 rounded-xl border p-4 transition-colors duration-300 ${
+        ref={root}
+        className={`space-y-3 rounded-xl border-2 p-4 transition-colors duration-300 ${
           status === "ok"
             ? "anim-glow border-emerald-400 bg-emerald-50"
             : status === "bad"
-              ? "anim-shake border-amber-300 bg-amber-50"
+              ? "anim-bad border-rose-300 bg-rose-50"
               : "border-slate-200 bg-slate-50"
         }`}
       >
@@ -107,7 +139,7 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
 
         <div
           aria-label="Kurduğun cümle"
-          className={`flex min-h-12 flex-wrap items-center gap-2 rounded-lg border-2 border-dashed bg-white p-2 transition-colors duration-300 ${
+          className={`relative flex min-h-14 flex-wrap items-center gap-2 rounded-lg border-2 border-dashed bg-white p-2 transition-colors duration-300 ${
             status === "ok" ? "border-emerald-400" : "border-slate-300"
           }`}
         >
@@ -119,22 +151,47 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
             return (
               <button
                 key={`${n}-${i}`}
-                onClick={() => unpick(k)}
-                className={`anim-pop rounded-lg px-3 py-1 text-sm font-medium text-white ${
+                data-fly={`chip-${i}`}
+                onClick={(e) => {
+                  if (status !== "ok") launch(`bank-${i}`, e.currentTarget);
+                  unpick(k);
+                }}
+                className={`relative z-10 rounded-lg px-3 py-1 text-sm font-medium text-white ${
                   status === "ok" ? "bg-emerald-600" : wrong ? "bg-rose-500" : "bg-blue-600"
                 }`}
               >
                 {/* Inner span shakes so the entry animation is not replayed. */}
-                <span className={`inline-block ${wrong ? "anim-shake" : ""}`}>
+                <span
+                  style={{ ["--i" as string]: k }}
+                  className={`inline-block ${
+                    wrong ? "anim-shake" : status === "ok" ? "anim-wave" : ""
+                  }`}
+                >
                   {words[i]}
                 </span>
               </button>
             );
           })}
           {status === "ok" && (
-            <span className="anim-pop ml-auto text-2xl" aria-hidden="true">
-              ✅
-            </span>
+            <>
+              <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+                <span className="fx-sweep" />
+              </span>
+              <span className="relative ml-auto" aria-hidden="true">
+                <Sparks count={18} distance={60} />
+                <svg viewBox="0 0 32 32" className="fx-check anim-pop h-10 w-10">
+                  <circle cx={16} cy={16} r={15} fill="#10b981" />
+                  <path
+                    d="M8 17l6 6 11-13"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth={4}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </>
           )}
         </div>
 
@@ -145,10 +202,16 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
             return (
               <button
                 key={`${n}-${i}`}
+                data-fly={`bank-${i}`}
                 disabled={used}
                 aria-hidden={used}
-                onClick={() => pick(i)}
-                className={`rounded-lg px-3 py-1 text-sm ring-1 duration-300 ${
+                onClick={(e) => {
+                  if (status === "ok") return;
+                  launch(`chip-${i}`, e.currentTarget);
+                  pick(i);
+                }}
+                style={{ ["--i" as string]: order.indexOf(i) }}
+                className={`anim-item rounded-lg px-3 py-1 text-sm ring-1 duration-300 ${
                   used
                     ? "scale-90 bg-slate-100 text-transparent ring-slate-200"
                     : "bg-white text-slate-800 shadow-sm ring-slate-300 hover:-translate-y-0.5 hover:bg-blue-50 hover:shadow-md"
@@ -175,7 +238,7 @@ export default function SentenceBuilder({ items }: { items: Example[] }) {
         >
           <div className="overflow-hidden">
             {hint && (
-              <p className="rounded-lg bg-amber-100 p-2 text-sm text-amber-900">
+              <p className="anim-open rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">
                 💡 {hint}
               </p>
             )}

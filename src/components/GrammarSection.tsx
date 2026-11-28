@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SoundWave, Sparks } from "@/components/anim/Effects";
+import Reveal from "@/components/anim/Reveal";
 import SentenceBuilder from "@/components/SentenceBuilder";
+import SentenceScene from "@/components/SentenceScene";
 import TenseTimeline from "@/components/TenseTimeline";
 import WordOrderBlocks from "@/components/WordOrderBlocks";
 import {
@@ -14,6 +17,7 @@ import {
 } from "@/data/grammar";
 import { gameActions } from "@/lib/gameStore";
 import { grammarActions, useGrammarState } from "@/lib/grammarStore";
+import { useStagedValue } from "@/lib/motion";
 import { speakLines, stopSpeech } from "@/lib/speech";
 
 const card = "rounded-2xl border border-slate-200 bg-white shadow-sm";
@@ -96,7 +100,11 @@ function QuestionList({ items }: { items: Item[] }) {
         return (
           <li
             key={id}
-            className={`rounded-xl border p-3 text-sm transition-colors duration-300 ${
+            className="anim-item"
+            style={{ ["--i" as string]: i % BATCH_SIZE }}
+          >
+          <div
+            className={`relative rounded-xl border p-3 text-sm transition-colors duration-300 ${
               !c
                 ? "border-slate-200 bg-slate-50"
                 : c.ok
@@ -106,6 +114,11 @@ function QuestionList({ items }: { items: Item[] }) {
                     }`
             }`}
           >
+            {c?.ok && (
+              <span className="absolute right-6 top-4">
+                <Sparks />
+              </span>
+            )}
             <p className="text-slate-800">
               <span className="mr-2 font-semibold text-slate-500">{i + 1}.</span>
               <span className="mr-2 rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
@@ -191,10 +204,65 @@ function QuestionList({ items }: { items: Item[] }) {
                 {c.text}
               </p>
             )}
+          </div>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+function Mistakes({ items }: { items: NonNullable<GrammarTopic["mistakes"]> }) {
+  // Bumping a card's run number remounts it, which replays its scene.
+  const [runs, setRuns] = useState<Record<string, number>>({});
+  return (
+    <Reveal>
+      <section>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Common Mistakes · Why is it wrong? / Yaygın Hatalar · Neden yanlış?
+        </h3>
+        <ul className="space-y-2">
+          {items.map((m, i) => {
+            const run = runs[m.wrong] ?? 0;
+            // The first showing is staggered; replays start at once.
+            const delay = { ["--i" as string]: run ? 0 : i };
+            return (
+              <li key={`${m.wrong}-${run}`}>
+                <div
+                  style={delay}
+                  className={`${run ? "anim-open" : "rv-item"} rounded-xl border border-rose-100 bg-rose-50/50 p-3 text-sm`}
+                >
+                  <p className="text-rose-700">
+                    ✗{" "}
+                    <span style={delay} className={run ? "line-through" : "rv-strike"}>
+                      {m.wrong}
+                    </span>
+                  </p>
+                  <p
+                    style={delay}
+                    className={`${run ? "anim-item" : "rv-fix"} font-medium text-emerald-700`}
+                  >
+                    ✓ {m.right}
+                  </p>
+                  <p
+                    style={{ ["--i" as string]: run ? 3 : i }}
+                    className={`${run ? "anim-item" : "rv-why"} mt-1 rounded-lg bg-white/80 p-2 text-slate-700`}
+                  >
+                    💡 {m.why}
+                  </p>
+                  <button
+                    onClick={() => setRuns((r) => ({ ...r, [m.wrong]: run + 1 }))}
+                    className="mt-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
+                  >
+                    ↻ Neden yanlış? Tekrar göster
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    </Reveal>
   );
 }
 
@@ -225,7 +293,7 @@ function SnippetBox({
   }
 
   return (
-    <div className="anim-panel space-y-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+    <div className="anim-open space-y-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
       <p className="text-sm font-semibold text-indigo-800">
         💬 {snippet.title}
         <span className="ml-2 text-xs font-normal text-indigo-600">
@@ -237,16 +305,26 @@ function SnippetBox({
           <li
             key={i}
             aria-current={active === i}
-            className={`flex gap-2 rounded-lg border-l-4 px-2 py-1 transition-all duration-300 ${
+            style={{ ["--i" as string]: i + 2 }}
+            className="anim-item"
+          >
+          <div
+            className={`flex gap-2 rounded-lg border-l-4 px-2 transition-all duration-500 ${
               active === i
-                ? "translate-x-1 border-indigo-600 bg-white shadow-md"
+                ? "scale-[1.02] border-indigo-600 bg-white py-2.5 text-base shadow-lg ring-2 ring-indigo-300"
                 : active === null
-                  ? "border-transparent"
-                  : "border-transparent opacity-60"
+                  ? "border-transparent py-1"
+                  : "scale-[0.98] border-transparent py-1 opacity-40"
             }`}
           >
-            <span className="w-5 shrink-0 font-semibold text-indigo-700">
-              {l.who}:
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-full text-xs font-bold ${
+                active === i
+                  ? "anim-celebrate bg-indigo-600 text-white"
+                  : "bg-indigo-100 text-indigo-700"
+              }`}
+            >
+              {l.who}
             </span>
             <span className="flex-1 text-slate-800">
               {l.text}
@@ -254,20 +332,7 @@ function SnippetBox({
                 <span className="block text-xs text-slate-500">{l.tr}</span>
               )}
             </span>
-            {active === i && (
-              <span
-                className="anim-pop flex h-4 shrink-0 items-end gap-0.5 self-center"
-                aria-hidden="true"
-              >
-                {[0, 0.2, 0.4, 0.1].map((d) => (
-                  <span
-                    key={d}
-                    className="anim-eq h-full w-1 rounded-full bg-indigo-600"
-                    style={{ animationDelay: `${d}s` }}
-                  />
-                ))}
-              </span>
-            )}
+            {active === i && <SoundWave className="self-center text-indigo-600" />}
             <button
               aria-label={`Satırı dinle: ${l.text}`}
               onClick={() => read(i, true)}
@@ -275,6 +340,7 @@ function SnippetBox({
             >
               🔊
             </button>
+          </div>
           </li>
         ))}
       </ul>
@@ -360,7 +426,12 @@ export default function GrammarSection({
   onPractice?: (topicId: string) => void;
 }) {
   const g = useGrammarState();
-  const [selectedId, setSelectedId] = useState(TOPICS[0].id);
+  const {
+    target: selectedId,
+    shown: shownId,
+    leaving,
+    set: setSelectedId,
+  } = useStagedValue(TOPICS[0].id);
   const [readyShown, setReadyShown] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<"questions" | "snippet" | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -369,7 +440,7 @@ export default function GrammarSection({
     i === 0 || g.completed.includes(TOPICS[i - 1].id);
   const idx = Math.max(
     0,
-    TOPICS.findIndex((t) => t.id === selectedId),
+    TOPICS.findIndex((t) => t.id === shownId),
   );
   const topic = TOPICS[idx];
   const done = g.completed.includes(topic.id);
@@ -441,9 +512,10 @@ export default function GrammarSection({
                     setSelectedId(t.id);
                     setNote(null);
                   }}
-                  className={`flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
-                    t.id === topic.id
-                      ? "translate-x-1 bg-blue-50 text-blue-700 shadow-sm"
+                  style={{ ["--i" as string]: i }}
+                  className={`anim-item flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                    t.id === selectedId
+                      ? "translate-x-2 bg-blue-50 text-blue-700 shadow-sm"
                       : open
                         ? "text-slate-700 hover:bg-slate-100"
                         : "cursor-not-allowed text-slate-400"
@@ -467,9 +539,9 @@ export default function GrammarSection({
 
       <article
         key={topic.id}
-        className={`${card} anim-stagger space-y-6 p-5`}
+        className={`${card} ${leaving ? "anim-leave" : "anim-scene"} min-w-0 space-y-6 p-5`}
       >
-        <header>
+        <header className="anim-item" style={{ ["--i" as string]: 1 }}>
           <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
             {topic.level}
           </span>
@@ -479,55 +551,57 @@ export default function GrammarSection({
           <p className="text-sm text-slate-600">{topic.summary}</p>
         </header>
 
-        {topic.id === "sentence-structure" && <WordOrderBlocks />}
+        {topic.id === "sentence-structure" && (
+          <Reveal>
+            <WordOrderBlocks />
+          </Reveal>
+        )}
 
-        <TenseTimeline topicId={topic.id} />
+        <Reveal>
+          <SentenceScene items={topic.examples} />
+        </Reveal>
+
+        <Reveal>
+          <TenseTimeline topicId={topic.id} />
+        </Reveal>
 
         {topic.sections.map((s) => (
-          <section key={s.title}>
+          <Reveal key={s.title}>
+          <section>
             <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
               {s.title}
             </h3>
             <ul className="space-y-2 text-[15px] leading-relaxed text-slate-800">
-              {s.points.map((p) => (
-                <li key={p} className="flex gap-2">
+              {s.points.map((p, i) => (
+                <li
+                  key={p}
+                  className="rv-item flex gap-2"
+                  style={{ ["--i" as string]: i }}
+                >
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
                   <span>{p}</span>
                 </li>
               ))}
             </ul>
           </section>
+          </Reveal>
         ))}
 
         {topic.mistakes && topic.mistakes.length > 0 && (
-          <section>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Common Mistakes · Why is it wrong? / Yaygın Hatalar · Neden yanlış?
-            </h3>
-            <ul className="space-y-2">
-              {topic.mistakes.map((m) => (
-                <li
-                  key={m.wrong}
-                  className="rounded-xl border border-rose-100 bg-rose-50/50 p-3 text-sm"
-                >
-                  <p className="text-rose-700 line-through">✗ {m.wrong}</p>
-                  <p className="font-medium text-emerald-700">✓ {m.right}</p>
-                  <p className="mt-1 text-slate-600">{m.why}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <Mistakes key={topic.id} items={topic.mistakes} />
         )}
 
+        <Reveal>
         <section>
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Key Phrases / Anahtar İfadeler (EN ↔ TR)
           </h3>
           <ul className="grid gap-2 sm:grid-cols-2">
-            {topic.phrases.map((p) => (
+            {topic.phrases.map((p, i) => (
               <li
                 key={p.en}
-                className="rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                style={{ ["--i" as string]: i }}
+                className="rv-item rounded-xl bg-slate-50 px-3 py-2 text-sm"
               >
                 <span className="font-medium text-slate-900">{p.en}</span>
                 <span className="block text-slate-500">{p.tr}</span>
@@ -535,16 +609,19 @@ export default function GrammarSection({
             ))}
           </ul>
         </section>
+        </Reveal>
 
+        <Reveal>
         <section>
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Example Sentences / Örnek Cümleler
           </h3>
           <ul className="space-y-2">
-            {topic.examples.map((e) => (
+            {topic.examples.map((e, i) => (
               <li
                 key={e.en}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                style={{ ["--i" as string]: i }}
+                className="rv-item rounded-xl border border-slate-200 bg-slate-50 p-3"
               >
                 <p className="font-medium text-slate-900">{e.en}</p>
                 <p className="text-sm text-slate-600">{e.tr}</p>
@@ -555,8 +632,11 @@ export default function GrammarSection({
             ))}
           </ul>
         </section>
+        </Reveal>
 
-        <SentenceBuilder key={topic.id} items={topic.examples} />
+        <Reveal>
+          <SentenceBuilder key={topic.id} items={topic.examples} />
+        </Reveal>
 
         <section className="space-y-3">
           <button
@@ -570,6 +650,16 @@ export default function GrammarSection({
                 ? "Başka bir kesit üret"
                 : "Farklı Anlat (Doğal Konuşma Kesiti)"}
           </button>
+          {busy === "snippet" && (
+            <div
+              className="anim-open space-y-2 rounded-xl border border-indigo-200 p-4"
+              aria-hidden="true"
+            >
+              <div className="fx-shimmer h-4 w-1/3 rounded" />
+              <div className="fx-shimmer h-4 w-5/6 rounded" />
+              <div className="fx-shimmer h-4 w-2/3 rounded" />
+            </div>
+          )}
           {showReady && (
             <SnippetBox
               snippet={topic.snippet}
@@ -629,7 +719,8 @@ export default function GrammarSection({
         <footer className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
           {done ? (
             <>
-              <span className="anim-glow rounded-full px-2 py-1 text-sm font-medium text-emerald-700">
+              <span className="anim-celebrate relative rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                <Sparks count={16} distance={44} />
                 ✓ Konu tamamlandı
               </span>
               {next && (

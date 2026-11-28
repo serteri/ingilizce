@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RoomEvent, Track } from "livekit-client";
+import { RoomEvent, Track, type LocalAudioTrack } from "livekit-client";
 import {
   BarVisualizer,
   LiveKitRoom,
@@ -10,10 +10,12 @@ import {
   VoiceAssistantControlBar,
   useLocalParticipant,
   useRoomContext,
+  useTrackVolume,
   useTranscriptions,
   useVoiceAssistant,
 } from "@livekit/components-react";
 import "@livekit/components-styles";
+import VoiceOrb from "@/components/anim/VoiceOrb";
 
 const STATE_LABELS: Record<string, string> = {
   disconnected: "Bağlanıyor...",
@@ -176,13 +178,17 @@ function Conversation() {
         {recent.length === 0 && (
           <p className="text-center text-slate-500">Konuşma burada görünecek…</p>
         )}
-        {recent.map((m) => (
+        {recent.map((m, i) => (
           <p
             key={m.id}
-            className={`rounded-lg px-3 py-2 ${
+            className={`anim-item rounded-lg px-3 py-2 transition-all duration-500 ${
               m.mine
                 ? "ml-8 bg-blue-50 text-slate-900"
                 : "mr-8 border border-slate-200 bg-white text-slate-700"
+            } ${
+              i === recent.length - 1
+                ? `scale-[1.03] shadow-lg ring-2 ${m.mine ? "ring-blue-300" : "ring-violet-300"}`
+                : "opacity-60"
             }`}
           >
             <span className="mr-2 text-xs text-slate-500">
@@ -197,7 +203,7 @@ function Conversation() {
         return (
           <div
             key={m.id}
-            className="rounded-lg border border-slate-200 bg-white p-3 text-sm"
+            className="anim-open rounded-lg border border-slate-200 bg-white p-3 text-sm"
           >
             <p className="text-slate-500">“{c.original}”</p>
             {c.hasIssue && (
@@ -219,9 +225,18 @@ function Conversation() {
 
 function Teacher({ onAgent }: { onAgent?: (joined: boolean) => void }) {
   const { state, audioTrack } = useVoiceAssistant();
+  const { microphoneTrack } = useLocalParticipant();
+  const teacherVolume = useTrackVolume(audioTrack);
+  const micVolume = useTrackVolume(
+    microphoneTrack?.track as LocalAudioTrack | undefined,
+  );
   return (
     <div className="flex w-full flex-col items-center gap-8">
-      <p className="text-xl font-medium text-slate-900">
+      <VoiceOrb
+        state={state}
+        volume={state === "speaking" ? teacherVolume : micVolume}
+      />
+      <p key={state} className="anim-item text-xl font-medium text-slate-900">
         {STATE_LABELS[state] ?? state}
       </p>
       <div className="h-32 w-full max-w-md rounded-2xl bg-slate-900 p-4">
@@ -301,7 +316,13 @@ export default function VoiceSession({
       </div>
     );
   }
-  if (!token) return <p className="text-slate-500">Hazırlanıyor...</p>;
+  if (!token)
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <VoiceOrb state="connecting" volume={0} />
+        <p className="text-slate-500">Hazırlanıyor...</p>
+      </div>
+    );
 
   return (
     <LiveKitRoom

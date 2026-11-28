@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import StatBadge from "@/components/anim/StatBadge";
 import GrammarSection from "@/components/GrammarSection";
 import VocabSection from "@/components/VocabSection";
 import VoiceSection from "@/components/VoiceSection";
@@ -9,6 +10,7 @@ import { TOPICS } from "@/data/grammar";
 import { LESSONS } from "@/data/lessons";
 import { useGameState } from "@/lib/gameStore";
 import { useGrammarState } from "@/lib/grammarStore";
+import { useStagedValue } from "@/lib/motion";
 import { useVocabState } from "@/lib/vocabStore";
 
 type Section = "grammar" | "vocab" | "voice";
@@ -48,7 +50,12 @@ function StatusChip({ status }: { status: VoiceStatus | null }) {
 }
 
 export default function Home() {
-  const [section, setSection] = useState<Section>("grammar");
+  const {
+    target: section,
+    shown,
+    leaving,
+    set: setSection,
+  } = useStagedValue<Section>("grammar");
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const vocab = useVocabState();
   const grammar = useGrammarState();
@@ -67,7 +74,10 @@ export default function Home() {
       nonce: Date.now(),
     });
     setSection("voice");
-  }, []);
+  }, [setSection]);
+
+  const stage = (id: Section) =>
+    shown === id ? `block ${leaving ? "anim-leave" : "anim-scene"}` : "hidden";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -85,36 +95,57 @@ export default function Home() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              key={`xp-${game.xp}`}
-              title="Toplam XP ve seviye"
-              className={`rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 ${game.xp > 0 ? "anim-bounce" : ""}`}
+            <StatBadge
+              value={game.xp}
+              ready={game.ready}
+              title="Toplam XP"
+              className="bg-indigo-50 text-indigo-700"
+              cheer={(d) => `+${d} XP`}
             >
-              ⭐ {game.ready ? game.xp : 0} XP · Sv. {game.ready ? game.level : 1}
-            </span>
-            <span
-              key={`streak-${game.streak}`}
+              ⭐ {game.ready ? game.xp : 0} XP
+            </StatBadge>
+            <StatBadge
+              value={game.level}
+              ready={game.ready}
+              title="Seviye"
+              className="bg-violet-100 text-violet-800"
+              cheer={() => "🎉 Seviye atladın!"}
+            >
+              🏆 Sv. {game.ready ? game.level : 1}
+            </StatBadge>
+            <StatBadge
+              value={game.streak}
+              ready={game.ready}
               title="Üst üste aktif gün"
-              className={`rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 ${game.streak > 0 ? "anim-bounce" : ""}`}
+              className="bg-orange-50 text-orange-700"
+              cheer={() => "🔥 Seri uzadı!"}
             >
               🔥 {game.ready ? game.streak : 0} gün
-            </span>
-            <span
-              key={`combo-${game.combo}`}
+            </StatBadge>
+            <StatBadge
+              value={game.combo}
+              ready={game.ready}
               title="Üst üste doğru cevap"
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                game.combo > 0 ? "anim-bounce" : ""
-              } ${
+              className={
                 game.ready && game.combo >= 3
                   ? "bg-rose-100 text-rose-700"
                   : "bg-slate-100 text-slate-600"
-              }`}
+              }
+              cheer={() =>
+                game.combo >= 3 ? `⚡ Combo ×${game.combo}!` : "👏 Doğru!"
+              }
             >
               ⚡ Combo ×{game.ready ? game.combo : 0}
-            </span>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            </StatBadge>
+            <StatBadge
+              value={vocab.learned.length}
+              ready={vocab.ready}
+              title="Öğrenilen kelime"
+              className="bg-emerald-50 text-emerald-700"
+              cheer={() => "✓ Yeni kelime!"}
+            >
               ✓ {vocab.ready ? vocab.learned.length : 0} kelime öğrenildi
-            </span>
+            </StatBadge>
             <StatusChip status={status} />
           </div>
         </div>
@@ -136,14 +167,14 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className={section === "grammar" ? "anim-panel block" : "hidden"}>
+        <div className={stage("grammar")}>
           <GrammarSection onPractice={handlePractice} />
         </div>
-        <div className={section === "vocab" ? "anim-panel block" : "hidden"}>
+        <div className={stage("vocab")}>
           <VocabSection />
         </div>
         {/* Kept mounted so a running voice session survives tab switches. */}
-        <div className={section === "voice" ? "anim-panel block" : "hidden"}>
+        <div className={stage("voice")}>
           <VoiceSection
             onStatus={handleStatus}
             onLeave={handleLeave}
